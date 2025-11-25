@@ -286,19 +286,24 @@ async function main() {
       continue
     }
 
-    // Parse dates (HKT timezone)
-    const r0PlannedDate = new Date(scheduleData.date + 'T00:00:00+08:00')
-    const r1PlannedDate = new Date(scheduleData.date + 'T00:00:00+08:00')
+    // Parse dates (HKT timezone - UTC+8)
+    // Create date in HKT: YYYY-MM-DD becomes YYYY-MM-DD 00:00:00 HKT
+    const [year, month, day] = scheduleData.date.split('-').map(Number)
+    const r0PlannedDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0))
+    // Adjust for HKT (UTC+8): subtract 8 hours from UTC to get HKT midnight
+    r0PlannedDate.setUTCHours(r0PlannedDate.getUTCHours() - 8)
+    
+    let r1PlannedDate = new Date(r0PlannedDate)
     
     // Set time based on time slot (HKT)
     if (scheduleData.timeSlot === 'SLOT_2300') {
-      r1PlannedDate.setHours(23, 0, 0, 0)
+      r1PlannedDate.setUTCHours(23 - 8, 0, 0, 0) // 23:00 HKT = 15:00 UTC
     } else if (scheduleData.timeSlot === 'SLOT_0130') {
-      r1PlannedDate.setHours(1, 30, 0, 0)
-      r1PlannedDate.setDate(r1PlannedDate.getDate() + 1) // Next day for 1:30
+      r1PlannedDate.setUTCHours(1 - 8 + 24, 30, 0, 0) // 01:30 HKT next day = 17:30 UTC previous day
+      r1PlannedDate.setUTCDate(r1PlannedDate.getUTCDate() + 1) // Next day for 1:30
     } else if (scheduleData.timeSlot === 'SLOT_0330') {
-      r1PlannedDate.setHours(3, 30, 0, 0)
-      r1PlannedDate.setDate(r1PlannedDate.getDate() + 1) // Next day for 3:30
+      r1PlannedDate.setUTCHours(3 - 8 + 24, 30, 0, 0) // 03:30 HKT next day = 19:30 UTC previous day
+      r1PlannedDate.setUTCDate(r1PlannedDate.getUTCDate() + 1) // Next day for 3:30
     }
 
     // Calculate due date (R0 + 14 days)
@@ -306,12 +311,19 @@ async function main() {
     dueDate.setDate(dueDate.getDate() + 14)
 
     // Check if schedule already exists (by equipment, date, and time slot)
+    // Create date range for the day in UTC
+    const [year, month, day] = scheduleData.date.split('-').map(Number)
+    const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0))
+    dayStart.setUTCHours(dayStart.getUTCHours() - 8) // HKT midnight = UTC 16:00 previous day
+    const dayEnd = new Date(dayStart)
+    dayEnd.setUTCHours(dayEnd.getUTCHours() + 24)
+    
     const existing = await prisma.schedule.findFirst({
       where: {
         equipmentId,
         r1PlannedDate: {
-          gte: new Date(scheduleData.date + 'T00:00:00+08:00'),
-          lt: new Date(scheduleData.date + 'T23:59:59+08:00'),
+          gte: dayStart,
+          lt: dayEnd,
         },
         timeSlot: scheduleData.timeSlot,
       },
