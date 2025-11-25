@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { EquipmentMapping } from '@/components/admin/EquipmentMapping'
 import { WorkOrderManagement } from '@/components/admin/WorkOrderManagement'
 import { ZoneEngineerAssignment } from '@/components/admin/ZoneEngineerAssignment'
+import { Navigation } from '@/components/Navigation'
 
 type AdminTab = 'mapping' | 'workorders' | 'engineers'
 
@@ -11,8 +12,10 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('mapping')
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50 flex">
+      <Navigation />
+      <main className="flex-1 overflow-auto p-6">
+        <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -67,7 +70,8 @@ export default function AdminPage() {
             {activeTab === 'engineers' && <ZoneEngineerAssignment />}
           </div>
         </div>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }

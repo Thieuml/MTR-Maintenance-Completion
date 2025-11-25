@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useSchedule, useZones } from '@/lib/hooks'
 import { ScheduleCalendar } from '@/components/ScheduleCalendar'
 import { ZoneFilter } from '@/components/ZoneFilter'
+import { Navigation } from '@/components/Navigation'
 
 type ViewMode = 'week' | 'month'
 
@@ -101,8 +102,10 @@ export default function SchedulePage() {
     : zones
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-full mx-auto">
+    <div className="min-h-screen bg-gray-50 flex">
+      <Navigation />
+      <main className="flex-1 overflow-auto p-4">
+        <div className="max-w-full mx-auto">
         {/* Header */}
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">
