@@ -113,6 +113,80 @@ bash scripts/test-sync.sh
 }
 ```
 
+## Schedule Management Endpoints
+
+### List Schedules (GET)
+
+```bash
+# Get all schedules
+curl http://localhost:3000/api/schedules
+
+# Filter by zone
+curl "http://localhost:3000/api/schedules?zoneId=zone-id"
+
+# Filter by date range
+curl "http://localhost:3000/api/schedules?from=2025-01-01&to=2025-01-31"
+
+# Filter by status
+curl "http://localhost:3000/api/schedules?status=PLANNED"
+
+# Combine filters
+curl "http://localhost:3000/api/schedules?zoneId=zone-id&from=2025-01-01&to=2025-01-31&status=PLANNED"
+```
+
+### Create Schedule (POST)
+
+```bash
+curl -X POST http://localhost:3000/api/schedules \
+  -H "Content-Type: application/json" \
+  -d '{
+    "equipmentId": "equipment-id",
+    "zoneId": "zone-id",
+    "r0PlannedDate": "2025-11-02T23:00:00Z",
+    "r1PlannedDate": "2025-11-02T23:00:00Z",
+    "batch": "A",
+    "timeSlot": "SLOT_2300",
+    "fixedEngineerId": "engineer-id",
+    "workOrderNumber": "5000355448"
+  }'
+```
+
+### Get Single Schedule (GET)
+
+```bash
+curl http://localhost:3000/api/schedules/schedule-id
+```
+
+### Update Schedule (PUT)
+
+```bash
+curl -X PUT http://localhost:3000/api/schedules/schedule-id \
+  -H "Content-Type: application/json" \
+  -d '{
+    "r1PlannedDate": "2025-11-03T23:00:00Z",
+    "status": "IN_PROGRESS"
+  }'
+```
+
+### Delete Schedule (DELETE)
+
+```bash
+curl -X DELETE http://localhost:3000/api/schedules/schedule-id
+```
+
+### Bulk Create Schedules (POST)
+
+```bash
+curl -X POST http://localhost:3000/api/schedules/bulk-create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "equipmentIds": ["equipment-id-1", "equipment-id-2"],
+    "startDate": "2025-11-01T00:00:00Z",
+    "endDate": "2025-12-31T00:00:00Z",
+    "defaultTimeSlot": "SLOT_0130"
+  }'
+```
+
 ## Next Steps
 
 After syncing data:
@@ -127,5 +201,9 @@ After syncing data:
    - Devices should appear in Equipment table
    - Visits should appear in MaintenanceVisit table
 
-3. **Proceed to Phase 2**: Schedule Management API
+3. **Create Schedules**:
+   - Use bulk-create to generate schedules for equipment
+   - Or create individual schedules via POST /api/schedules
+
+4. **Proceed to Phase 3**: Engineer Assignment API
 
