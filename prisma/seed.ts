@@ -5,7 +5,7 @@
  * - MTR Zones (MTR-01 to MTR-06)
  * - Certified Engineers (fixed engineers for each zone with CP & RW certs)
  * - Equipment (from schedule data)
- * - Schedules (Weeks 45-48, November 2024)
+ * - Schedules (Weeks 45-48, November 2025)
  */
 
 import { PrismaClient, ScheduleBatch, TimeSlot } from '@prisma/client'
@@ -24,6 +24,8 @@ function createHKTDate(year: number, month: number, day: number, hour: number = 
   return new Date(dateStr)
 }
 
+const TARGET_YEAR = 2025
+
 // Helper function to calculate due date (R0 + 14 days)
 function calculateDueDate(r0Date: Date): Date {
   const dueDate = new Date(r0Date)
@@ -32,7 +34,7 @@ function calculateDueDate(r0Date: Date): Date {
 }
 
 // Helper function to parse deadline string (e.g., "16-Nov" -> Date)
-function parseDeadline(deadlineStr: string, baseYear: number = 2024): Date {
+function parseDeadline(deadlineStr: string, baseYear: number = TARGET_YEAR): Date {
   const [day, monthStr] = deadlineStr.split('-')
   const monthMap: { [key: string]: number } = {
     'Nov': 10,
@@ -54,16 +56,6 @@ function parseDeadline(deadlineStr: string, baseYear: number = 2024): Date {
 
 async function main() {
   console.log('🌱 Seeding database...')
-
-  // Calculate current week's Sunday (start of week)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const dayOfWeek = today.getDay()
-  const currentWeekSunday = new Date(today)
-  currentWeekSunday.setDate(today.getDate() - dayOfWeek)
-  
-  console.log(`📅 Current week Sunday: ${currentWeekSunday.toISOString().split('T')[0]}`)
-  console.log(`📅 Week 48 schedules will map to: ${currentWeekSunday.toISOString().split('T')[0]} to ${new Date(currentWeekSunday.getTime() + 6*24*60*60*1000).toISOString().split('T')[0]}`)
 
   // Clear existing data (order matters due to foreign keys)
   console.log('\n🗑️  Clearing existing data...')
@@ -535,7 +527,6 @@ async function main() {
 
     // Parse date and use it directly (as extracted from the schedule images)
     const [, month, day] = schedule.date.split('-').map(Number)
-    const targetYear = 2025
     
     let hour = 0
     let minute = 0
@@ -551,11 +542,13 @@ async function main() {
       minute = 30
     }
 
-    const r0PlannedDate = createHKTDate(targetYear, month, day, hour, minute)
-    const r1PlannedDate = createHKTDate(targetYear, month, day, hour, minute)
+    const r0PlannedDate = createHKTDate(TARGET_YEAR, month, day, hour, minute)
+    const r1PlannedDate = createHKTDate(TARGET_YEAR, month, day, hour, minute)
     
-    // Calculate due date (R0 + 14 days) instead of parsing deadline
-    const dueDate = calculateDueDate(r0PlannedDate)
+    // Use provided deadline if available, otherwise default to R0 + 14 days
+    const dueDate = schedule.deadline
+      ? parseDeadline(schedule.deadline, TARGET_YEAR)
+      : calculateDueDate(r0PlannedDate)
 
     try {
       await prisma.schedule.create({
