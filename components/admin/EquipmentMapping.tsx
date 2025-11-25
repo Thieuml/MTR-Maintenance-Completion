@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useZones } from '@/lib/hooks'
-import { fetchMTRDevicesFromLooker } from '@/lib/looker'
 
 export function EquipmentMapping() {
   const { zones } = useZones()
@@ -13,12 +12,13 @@ export function EquipmentMapping() {
   const [selectedZone, setSelectedZone] = useState<string>('')
   const [selectedBatch, setSelectedBatch] = useState<'A' | 'B'>('A')
 
-  // Fetch equipment from Looker
+  // Fetch equipment from API
   useEffect(() => {
     async function loadEquipment() {
       try {
-        const devices = await fetchMTRDevicesFromLooker()
-        setEquipment(devices)
+        const res = await fetch('/api/admin/equipment')
+        const data = await res.json()
+        setEquipment(data.equipment || [])
       } catch (error) {
         console.error('Failed to load equipment:', error)
       }
@@ -116,8 +116,9 @@ export function EquipmentMapping() {
             >
               <option value="">Select equipment...</option>
               {equipment.map((eq: any) => (
-                <option key={eq.id || eq.equipmentNumber} value={eq.id || eq.equipmentNumber}>
-                  {eq.equipmentNumber || eq['device.location']} - {eq.name || eq.equipmentNumber}
+                <option key={eq.equipmentNumber} value={eq.id || eq.equipmentNumber}>
+                  {eq.equipmentNumber} - {eq.name || eq.equipmentNumber}
+                  {eq.inDatabase === false && ' (Not in DB)'}
                 </option>
               ))}
             </select>
