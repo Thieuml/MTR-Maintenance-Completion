@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useSchedule } from '@/lib/hooks'
 import { ScheduleCalendar } from '@/components/ScheduleCalendar'
 import { ZoneFilter } from '@/components/ZoneFilter'
-import { createHKTDate } from '@/lib/utils/timezone'
 
 export default function SchedulePage() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)

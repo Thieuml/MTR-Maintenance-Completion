@@ -1,7 +1,6 @@
 'use client'
 
 import { ScheduleCard } from './ScheduleCard'
-import { formatHKT } from '@/lib/utils/timezone'
 
 interface ScheduleCalendarProps {
   schedules: any[]
