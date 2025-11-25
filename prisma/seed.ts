@@ -70,8 +70,6 @@ async function main() {
   await prisma.maintenanceVisit.deleteMany()
   await prisma.reschedule.deleteMany()
   await prisma.schedule.deleteMany()
-  await prisma.equipmentZoneMapping.deleteMany().catch(() => {}) // May not exist
-  await prisma.zoneEngineerAssignment.deleteMany().catch(() => {}) // May not exist
   await prisma.equipment.deleteMany()
   await prisma.engineer.deleteMany()
   await prisma.zone.deleteMany()
@@ -535,24 +533,8 @@ async function main() {
       continue
     }
 
-    // Parse date and map to corresponding week in 2025 based on week number
-    // Use the week number from seed data to map correctly:
-    // Week 48 → current week (Nov 23-29, 2025) - same calendar dates
-    // Week 47 → 1 week ago (Nov 16-22, 2025) - same calendar dates
-    // Week 46 → 2 weeks ago (Nov 9-15, 2025) - same calendar dates
-    // Week 45 → 3 weeks ago (Nov 2-8, 2025) - same calendar dates
+    // Parse date and use it directly (as extracted from the schedule images)
     const [year, month, day] = schedule.date.split('-').map(Number)
-    
-    // Get the week number from seed data (45, 46, 47, or 48)
-    const weekNumber = schedule.week
-    
-    // Calculate weeks ago from current week (48)
-    const weeksAgo = 48 - weekNumber
-    
-    // Simple: map same calendar date (Nov 25, 2024 → Nov 25, 2025)
-    // Then adjust by weeks ago
-    const adjustedDate = new Date(2025, month - 1, day)
-    adjustedDate.setDate(adjustedDate.getDate() - (weeksAgo * 7))
     
     let hour = 0
     let minute = 0
@@ -568,20 +550,8 @@ async function main() {
       minute = 30
     }
 
-    const r0PlannedDate = createHKTDate(
-      adjustedDate.getFullYear(),
-      adjustedDate.getMonth() + 1,
-      adjustedDate.getDate(),
-      hour,
-      minute
-    )
-    const r1PlannedDate = createHKTDate(
-      adjustedDate.getFullYear(),
-      adjustedDate.getMonth() + 1,
-      adjustedDate.getDate(),
-      hour,
-      minute
-    )
+    const r0PlannedDate = createHKTDate(year, month, day, hour, minute)
+    const r1PlannedDate = createHKTDate(year, month, day, hour, minute)
     
     // Calculate due date (R0 + 14 days) instead of parsing deadline
     const dueDate = calculateDueDate(r0PlannedDate)
