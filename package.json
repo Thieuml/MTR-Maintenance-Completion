@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:november": "tsx prisma/seed-november.ts",
     "db:studio": "prisma studio",
     "setup:novu": "tsx scripts/setup-novu-workflow.ts",
     "test:novu": "tsx scripts/test-novu-notification.ts"
