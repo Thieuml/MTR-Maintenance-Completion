@@ -387,13 +387,15 @@ This document outlines the implementation plan for building out the MTR Maintena
 3. **Novu**: Set up workflows and test notifications
 4. **Cron Jobs**: Configure Vercel cron or external scheduler
 
-## Questions to Resolve
+## Questions Resolved ✅
 
-1. **OR Numbers**: Can we bulk import from EAMS via Looker, or manual import?
-2. **Certifications**: Are CP/RW certs in Looker, or separate system?
-3. **PM Forms**: Digital upload or still paper-based?
-4. **EAMS Integration**: Direct API integration or manual entry?
-5. **Timezone**: All times in HKT (Hong Kong Time)?
+1. **OR Numbers**: Use dummy OR numbers (format: 5000XXXXXX) for now. Manual import later.
+2. **Certifications**: Static list of certified engineers per zone (seeded in database).
+3. **PM Forms**: No form upload - just track completion status. Forms still via WhatsApp.
+4. **EAMS Integration**: Not in first couple of versions.
+5. **Timezone**: All times in HKT (Hong Kong Time, UTC+8).
+
+**See**: `DECISIONS.md` for detailed technical decisions.
 
 ## Getting Started
 
