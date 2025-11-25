@@ -8,10 +8,10 @@ echo "🔧 Setting up MTR Maintenance Tracking environment variables..."
 echo ""
 
 # Database URL (PostgreSQL)
-# Using same database as shiftproto project
+# MTR Maintenance Tracking - Separate database
 if [ -z "$DATABASE_URL" ]; then
-    export DATABASE_URL="postgresql://neondb_owner:npg_CiquK26stvbx@ep-late-bar-a4a9pbg5-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-    echo "✅ DATABASE_URL set (using same database as shiftproto)"
+    export DATABASE_URL="postgresql://neondb_owner:npg_Vq0poyB8OnUH@ep-small-mountain-admatw43-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    echo "✅ DATABASE_URL set (MTR Maintenance Tracking database)"
 else
     echo "✅ DATABASE_URL is set"
 fi
