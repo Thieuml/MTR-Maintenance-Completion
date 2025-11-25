@@ -21,7 +21,7 @@ export default function AdminPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Admin Panel
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-700">
             Manage equipment mappings, work orders, and engineer assignments
           </p>
         </div>

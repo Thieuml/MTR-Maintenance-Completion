@@ -88,14 +88,14 @@ export function ZoneEngineerAssignment() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-4">Zone Engineer Assignments</h2>
-      <p className="text-sm text-gray-600 mb-6">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900">Zone Engineer Assignments</h2>
+      <p className="text-sm text-gray-700 mb-6">
         Assign engineers to zones. FIXED_QUALIFIED requires CP & RW certificates.
       </p>
 
       {/* Assign Form */}
       <div className="bg-gray-50 p-4 rounded-lg mb-6">
-        <h3 className="font-medium mb-4">Assign Engineer to Zone</h3>
+            <h3 className="font-medium mb-4 text-gray-900">Assign Engineer to Zone</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -104,7 +104,7 @@ export function ZoneEngineerAssignment() {
             <select
               value={formData.zoneId}
               onChange={(e) => setFormData({ ...formData, zoneId: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             >
               <option value="">Select zone...</option>
               {zones.map((zone: any) => (
@@ -123,7 +123,7 @@ export function ZoneEngineerAssignment() {
               onChange={(e) =>
                 setFormData({ ...formData, engineerId: e.target.value })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             >
               <option value="">Select engineer...</option>
               {engineers.map((eng: any) => (
@@ -143,7 +143,7 @@ export function ZoneEngineerAssignment() {
               onChange={(e) =>
                 setFormData({ ...formData, role: e.target.value as 'FIXED_QUALIFIED' | 'FIXED' })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             >
               <option value="FIXED_QUALIFIED">Fixed Qualified (CP+RW)</option>
               <option value="FIXED">Fixed</option>
@@ -163,7 +163,7 @@ export function ZoneEngineerAssignment() {
 
       {/* Existing Assignments */}
       <div>
-        <h3 className="font-medium mb-4">Existing Assignments ({assignments.length})</h3>
+        <h3 className="font-medium mb-4 text-gray-900">Existing Assignments ({assignments.length})</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -185,19 +185,19 @@ export function ZoneEngineerAssignment() {
             <tbody className="bg-white divide-y divide-gray-200">
               {assignments.map((assignment) => (
                 <tr key={assignment.id}>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-3 text-sm text-gray-900">
                     {assignment.zone.code} - {assignment.zone.name}
                   </td>
-                  <td className="px-4 py-3 text-sm">{assignment.engineer.name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{assignment.engineer.name}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100">
+                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-200 text-gray-900">
                       {assignment.role.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <button
                       onClick={() => handleDelete(assignment.zoneId, assignment.engineerId)}
-                      className="text-red-600 hover:text-red-800"
+                      className="text-red-600 hover:text-red-800 font-medium"
                     >
                       Remove
                     </button>

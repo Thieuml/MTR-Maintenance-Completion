@@ -181,7 +181,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Date Range Display */}
-          <div className="mt-3 text-sm text-gray-600 font-medium">
+          <div className="mt-3 text-sm text-gray-900 font-medium">
             {displayRange}
           </div>
         </div>

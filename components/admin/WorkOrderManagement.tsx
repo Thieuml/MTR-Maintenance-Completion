@@ -83,14 +83,14 @@ export function WorkOrderManagement() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-4">Work Order Management</h2>
-      <p className="text-sm text-gray-600 mb-6">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900">Work Order Management</h2>
+      <p className="text-sm text-gray-700 mb-6">
         Map work orders (OR numbers) to equipment and dates.
       </p>
 
       {/* Assign Work Order Form */}
       <div className="bg-gray-50 p-4 rounded-lg mb-6">
-        <h3 className="font-medium mb-4">Assign Work Order</h3>
+            <h3 className="font-medium mb-4 text-gray-900">Assign Work Order</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -103,7 +103,7 @@ export function WorkOrderManagement() {
                 setFormData({ ...formData, workOrderNumber: e.target.value })
               }
               placeholder="e.g., 5000355448"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             />
           </div>
           <div>
@@ -115,7 +115,7 @@ export function WorkOrderManagement() {
               onChange={(e) =>
                 setFormData({ ...formData, equipmentId: e.target.value })
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             >
               <option value="">Select equipment...</option>
               {equipment.map((eq: any) => (
@@ -133,7 +133,7 @@ export function WorkOrderManagement() {
               type="date"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
             />
           </div>
           <div className="flex items-end">
@@ -150,7 +150,7 @@ export function WorkOrderManagement() {
 
       {/* Existing Work Orders */}
       <div>
-        <h3 className="font-medium mb-4">Assigned Work Orders ({workOrders.length})</h3>
+        <h3 className="font-medium mb-4 text-gray-900">Assigned Work Orders ({workOrders.length})</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -169,11 +169,11 @@ export function WorkOrderManagement() {
             <tbody className="bg-white divide-y divide-gray-200">
               {workOrders.map((wo) => (
                 <tr key={wo.id}>
-                  <td className="px-4 py-3 text-sm">{wo.equipment.equipmentNumber}</td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-3 text-sm text-gray-900">{wo.equipment.equipmentNumber}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
                     {new Date(wo.r1PlannedDate).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-3 text-sm font-mono">
+                  <td className="px-4 py-3 text-sm font-mono text-gray-900">
                     {wo.workOrderNumber}
                   </td>
                 </tr>

@@ -115,7 +115,7 @@ export function ScheduleCalendar({
                   <div className="font-semibold">
                     {date.toLocaleDateString('en-US', { weekday: 'short' })}
                   </div>
-                  <div className={`text-xs ${isToday ? 'text-blue-700 font-bold' : ''}`}>
+                  <div className={`text-xs ${isToday ? 'text-blue-700 font-bold' : 'text-gray-900'}`}>
                     {date.toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
