@@ -39,9 +39,6 @@ export function ScheduleCard({ schedule, onClick }: ScheduleCardProps) {
 
   const statusColor = statusColors[schedule.status] || 'bg-gray-100 border-gray-300'
 
-  // Show batch as "A" or "B-Week"
-  const batchDisplay = schedule.batch === 'B' ? 'B-Week' : schedule.batch
-
   return (
     <div
       onClick={onClick}
@@ -64,7 +61,7 @@ export function ScheduleCard({ schedule, onClick }: ScheduleCardProps) {
         </div>
         <div className="flex-shrink-0">
           <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">
-            {batchDisplay}
+            {schedule.batch}
           </span>
         </div>
       </div>
