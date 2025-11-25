@@ -534,7 +534,8 @@ async function main() {
     }
 
     // Parse date and use it directly (as extracted from the schedule images)
-    const [year, month, day] = schedule.date.split('-').map(Number)
+    const [, month, day] = schedule.date.split('-').map(Number)
+    const targetYear = 2025
     
     let hour = 0
     let minute = 0
@@ -550,8 +551,8 @@ async function main() {
       minute = 30
     }
 
-    const r0PlannedDate = createHKTDate(year, month, day, hour, minute)
-    const r1PlannedDate = createHKTDate(year, month, day, hour, minute)
+    const r0PlannedDate = createHKTDate(targetYear, month, day, hour, minute)
+    const r1PlannedDate = createHKTDate(targetYear, month, day, hour, minute)
     
     // Calculate due date (R0 + 14 days) instead of parsing deadline
     const dueDate = calculateDueDate(r0PlannedDate)
