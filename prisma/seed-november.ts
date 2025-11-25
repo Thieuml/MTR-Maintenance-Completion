@@ -346,6 +346,19 @@ async function main() {
       })
       schedulesUpdated++
     } else {
+      // Check if work order number already exists (might be from a different schedule)
+      let workOrderNumber = scheduleData.orNumber
+      if (workOrderNumber) {
+        const existingWO = await prisma.schedule.findUnique({
+          where: { workOrderNumber },
+        })
+        if (existingWO) {
+          // Work order already exists, set to null to avoid constraint violation
+          console.warn(`⚠️  Work order ${workOrderNumber} already exists, skipping WO assignment for ${scheduleData.equipmentNumber} on ${scheduleData.date}`)
+          workOrderNumber = null
+        }
+      }
+
       // Create new schedule
       await prisma.schedule.create({
         data: {
@@ -356,7 +369,7 @@ async function main() {
           dueDate,
           batch: scheduleData.batch,
           timeSlot: scheduleData.timeSlot,
-          workOrderNumber: scheduleData.orNumber,
+          workOrderNumber,
           status: 'PLANNED',
         },
       })

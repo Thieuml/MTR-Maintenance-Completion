@@ -46,10 +46,14 @@ export async function GET(request: NextRequest) {
     if (from || to) {
       where.r1PlannedDate = {}
       if (from) {
-        where.r1PlannedDate.gte = new Date(from)
+        // Parse date string (YYYY-MM-DD) and create start of day in UTC
+        const fromDate = new Date(from + 'T00:00:00Z')
+        where.r1PlannedDate.gte = fromDate
       }
       if (to) {
-        where.r1PlannedDate.lte = new Date(to)
+        // Parse date string (YYYY-MM-DD) and create end of day in UTC
+        const toDate = new Date(to + 'T23:59:59.999Z')
+        where.r1PlannedDate.lte = toDate
       }
     }
 
