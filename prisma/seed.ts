@@ -62,27 +62,16 @@ async function main() {
   const currentWeekSunday = new Date(today)
   currentWeekSunday.setDate(today.getDate() - dayOfWeek)
   
-  // Reference: Week 48 in seed data starts Nov 23, 2024 (which was a Saturday)
-  // We want Week 48 schedules to appear in the current week
-  // So we calculate the offset from Nov 23, 2024 to current week's Sunday
-  const referenceWeek48Start = new Date('2024-11-23T00:00:00+08:00')
-  const referenceWeek48Sunday = new Date(referenceWeek48Start)
-  referenceWeek48Sunday.setDate(referenceWeek48Start.getDate() - referenceWeek48Start.getDay())
-  
-  // Calculate offset in days from reference week Sunday to current week Sunday
-  const daysOffset = Math.floor((currentWeekSunday.getTime() - referenceWeek48Sunday.getTime()) / (24 * 60 * 60 * 1000))
-  
   console.log(`📅 Current week Sunday: ${currentWeekSunday.toISOString().split('T')[0]}`)
-  console.log(`📅 Reference Week 48 Sunday: ${referenceWeek48Sunday.toISOString().split('T')[0]}`)
-  console.log(`📅 Days offset: ${daysOffset}`)
+  console.log(`📅 Week 48 schedules will map to: ${currentWeekSunday.toISOString().split('T')[0]} to ${new Date(currentWeekSunday.getTime() + 6*24*60*60*1000).toISOString().split('T')[0]}`)
 
   // Clear existing data (order matters due to foreign keys)
   console.log('\n🗑️  Clearing existing data...')
   await prisma.maintenanceVisit.deleteMany()
   await prisma.reschedule.deleteMany()
   await prisma.schedule.deleteMany()
-  await prisma.equipmentZoneMapping.deleteMany()
-  await prisma.zoneEngineerAssignment.deleteMany()
+  await prisma.equipmentZoneMapping.deleteMany().catch(() => {}) // May not exist
+  await prisma.zoneEngineerAssignment.deleteMany().catch(() => {}) // May not exist
   await prisma.equipment.deleteMany()
   await prisma.engineer.deleteMany()
   await prisma.zone.deleteMany()
@@ -546,26 +535,13 @@ async function main() {
       continue
     }
 
-    // Parse date and adjust to current week
+    // Parse date and map to 2025
+    // Simple: same calendar date, different year
+    // Nov 25, 2024 → Nov 25, 2025
     const [year, month, day] = schedule.date.split('-').map(Number)
-    const originalDate = new Date(year, month - 1, day)
     
-    // Calculate which week this schedule belongs to (45, 46, 47, or 48)
-    // Week 48 starts Nov 23, 2024
-    const week48Start = new Date('2024-11-23T00:00:00+08:00')
-    const daysDiff = Math.floor((originalDate.getTime() - week48Start.getTime()) / (24 * 60 * 60 * 1000))
-    const weekNumber = schedule.week // Use the week number from seed data (45, 46, 47, or 48)
-    
-    // Calculate offset from current week
-    // Week 48 = current week (0 offset)
-    // Week 47 = 1 week ago (-7 days)
-    // Week 46 = 2 weeks ago (-14 days)
-    // Week 45 = 3 weeks ago (-21 days)
-    const weekOffset = (48 - weekNumber) * 7
-    
-    // Adjust date to current week
-    const adjustedDate = new Date(originalDate)
-    adjustedDate.setDate(originalDate.getDate() + daysOffset + weekOffset)
+    // Create adjusted date: same month/day, year 2025
+    const adjustedDate = new Date(2025, month - 1, day)
     
     let hour = 0
     let minute = 0
