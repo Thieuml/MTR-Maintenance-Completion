@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// MTR Zones (MTR-01 to MTR-06)
+model Zone {
+  id          String      @id @default(cuid())
+  code        String      @unique // e.g., "MTR-01", "MTR-02"
+  name        String      // e.g., "HK Station", "Kowloon Station"
+  description String?     // Additional details
+  active      Boolean     @default(true)
+  equipment   Equipment[]
+  schedules   Schedule[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// Equipment/Units (Lifts and Escalators)
+model Equipment {
+  id              String      @id @default(cuid())
+  deviceId        String?     @unique // Device ID from Looker
+  equipmentNumber String      @unique // e.g., "HOK-E25", "KOW-E01"
+  name            String?     // Full name/description
+  type            EquipmentType
+  location        String?     // Station/location name
+  buildingId      String?     // Building ID from Looker
+  buildingName    String?     // Building name from Looker
+  fullAddress     String?     // Full address from Looker
+  zone            Zone        @relation(fields: [zoneId], references: [id])
+  zoneId          String
+  active          Boolean     @default(true)
+  schedules       Schedule[]
+  visits          MaintenanceVisit[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+enum EquipmentType {
+  ELEVATOR
+  ESCALATOR
+}
+
+// Engineers (synced from Looker)
+model Engineer {
+  id                  String             @id @default(cuid())
+  name                String
+  email               String?            @unique
+  phone               String?
+  active              Boolean            @default(true)
+  role                EngineerRole       @default(ENGINEER)
+  // CP & RW certificates required for MTR sites
+  hasCPCert           Boolean            @default(false) // CP certificate
+  hasRWCert           Boolean            @default(false) // RW certificate
+  // Looker sync metadata
+  lookerId            String?            @unique
+  fixedSchedules      Schedule[]         @relation("FixedEngineerSchedules")
+  rotatingSchedules   Schedule[]         @relation("RotatingEngineerSchedules")
+  visits              MaintenanceVisit[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+enum EngineerRole {
+  ADMIN
+  OPS
+  ENGINEER
+  SUPERVISOR
+}
+
+// Maintenance Schedule (14-day cycle)
+model Schedule {
+  id                String              @id @default(cuid())
+  equipment         Equipment           @relation(fields: [equipmentId], references: [id])
+  equipmentId       String
+  zone              Zone                @relation(fields: [zoneId], references: [id])
+  zoneId            String
+  
+  // R0 Schedule (original locked schedule from MTR)
+  r0PlannedDate     DateTime            // Original committed date (locked in MTR system)
+  
+  // R1 Schedule (WM's proposed updated schedule)
+  r1PlannedDate     DateTime            // Proposed new schedule date
+  
+  // Due Date (R0 + 14 days - latest completion date)
+  dueDate           DateTime            // R0PlannedDate + 14 days
+  
+  // Cycle tracking (A or B batch)
+  batch             ScheduleBatch       // "A" or "B" batch
+  
+  // Time slot (23:00, 1:30, or 3:30)
+  timeSlot          TimeSlot
+  
+  // Engineer assignments (2-man team)
+  fixedEngineer     Engineer?           @relation("FixedEngineerSchedules", fields: [fixedEngineerId], references: [id])
+  fixedEngineerId    String?
+  rotatingEngineer  Engineer?           @relation("RotatingEngineerSchedules", fields: [rotatingEngineerId], references: [id])
+  rotatingEngineerId String?
+  
+  // Work Order (OR number from EAMS)
+  workOrderNumber   String?             @unique // OR number (e.g., "5000355448")
+  
+  // Status tracking
+  status            ScheduleStatus       @default(PLANNED)
+  
+  // Execution tracking
+  visits            MaintenanceVisit[]
+  reschedules        Reschedule[]
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@index([equipmentId, r1PlannedDate])
+  @@index([zoneId, r1PlannedDate])
+  @@index([r1PlannedDate])
+  @@index([dueDate])
+}
+
+enum ScheduleBatch {
+  A
+  B
+}
+
+enum TimeSlot {
+  SLOT_2300  // 23:00
+  SLOT_0130  // 1:30
+  SLOT_0330  // 3:30
+}
+
+enum ScheduleStatus {
+  PLANNED           // Scheduled but not started
+  IN_PROGRESS       // Maintenance in progress
+  COMPLETED         // Completed on committed date
+  COMPLETED_LATE    // Completed but missed committed date (within tolerance)
+  MISSED            // Missed committed date, needs rescheduling
+  RESCHEDULED       // Explicitly rescheduled
+  OVERDUE           // Past due date (14 days expired)
+  CANCELLED         // Cancelled
+}
+
+// Maintenance Visit (actual execution)
+model MaintenanceVisit {
+  id                String              @id @default(cuid())
+  schedule          Schedule            @relation(fields: [scheduleId], references: [id])
+  scheduleId        String
+  equipment         Equipment           @relation(fields: [equipmentId], references: [id])
+  equipmentId       String
+  
+  // Execution details
+  actualStartDate   DateTime            // When maintenance actually started
+  actualEndDate     DateTime?           // When maintenance completed
+  
+  // Engineer who performed the work
+  engineer          Engineer            @relation(fields: [engineerId], references: [id])
+  engineerId        String
+  
+  // Completion status
+  completed         Boolean             @default(false)
+  completionDate    DateTime?           // When marked as completed
+  
+  // PM Form tracking
+  pmFormSubmitted   Boolean             @default(false)
+  pmFormSubmittedAt DateTime?
+  
+  // EAMS entry tracking
+  eamsEntered       Boolean             @default(false)
+  eamsEnteredAt     DateTime?
+  eamsEnteredBy     String?             // Admin who entered into EAMS
+  
+  // Classification (auto-calculated)
+  classification    VisitClassification
+  
+  // Notes/comments
+  notes             String?             @db.Text
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  @@index([scheduleId])
+  @@index([equipmentId, actualStartDate])
+  @@index([engineerId, actualStartDate])
+}
+
+enum VisitClassification {
+  COMMITTED_DATE    // Completed on committed date (best case)
+  ON_TIME           // Completed within ±3-5 day window
+  LATE              // Completed after tolerance window but before due date
+  OVERDUE           // Completed after due date
+  NOT_COMPLETED     // Not completed
+}
+
+// Rescheduling records
+model Reschedule {
+  id                String              @id @default(cuid())
+  schedule          Schedule            @relation(fields: [scheduleId], references: [id])
+  scheduleId        String
+  
+  // Original schedule details
+  originalDate      DateTime
+  
+  // New schedule details
+  newDate           DateTime
+  reason            String?             @db.Text
+  
+  // Approval tracking
+  mtrApproved       Boolean             @default(false)
+  mtrApprovedAt     DateTime?
+  mtrApprovedBy     String?
+  
+  // Status
+  status            RescheduleStatus    @default(PENDING)
+  
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String?             // User who created the reschedule request
+  
+  @@index([scheduleId])
+  @@index([status])
+}
+
+enum RescheduleStatus {
+  PENDING           // Awaiting MTR approval
+  APPROVED          // Approved by MTR
+  REJECTED          // Rejected by MTR
+  COMPLETED         // Rescheduled and completed
+}
+
