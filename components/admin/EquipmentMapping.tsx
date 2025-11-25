@@ -191,6 +191,11 @@ export function EquipmentMapping() {
                 <tr key={mapping.id}>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {mapping.equipment.equipmentNumber}
+                    {mapping.equipment.canUse2300Slot && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">
+                        23:00
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {mapping.zone.code} - {mapping.zone.name}

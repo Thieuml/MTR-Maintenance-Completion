@@ -7,6 +7,7 @@ interface ScheduleCardProps {
       equipmentNumber: string
       name: string | null
       type: string
+      canUse2300Slot?: boolean
     }
     zone: {
       code: string
@@ -39,10 +40,15 @@ export function ScheduleCard({ schedule, onClick }: ScheduleCardProps) {
 
   const statusColor = statusColors[schedule.status] || 'bg-gray-100 border-gray-300'
 
+  // Override status color if this equipment can use 23:00 slot and is scheduled at 23:00
+  const is2300SlotAllowed = schedule.equipment.canUse2300Slot && schedule.timeSlot === 'SLOT_2300'
+  const finalBgColor = is2300SlotAllowed ? 'bg-green-50' : statusColor.split(' ')[0]
+  const finalBorderColor = is2300SlotAllowed ? 'border-green-300' : statusColor.split(' ')[1] || 'border-gray-300'
+  
   return (
     <div
       onClick={onClick}
-      className={`p-1.5 rounded border ${statusColor} cursor-pointer hover:shadow-sm transition-shadow text-xs ${
+      className={`p-1.5 rounded border ${finalBgColor} ${finalBorderColor} cursor-pointer hover:shadow-sm transition-shadow text-xs ${
         !schedule.fixedEngineer && !schedule.rotatingEngineer
           ? 'border-dashed border-pink-400 bg-pink-50'
           : ''

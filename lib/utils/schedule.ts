@@ -114,13 +114,14 @@ export function determineBatch(date: Date, startDate?: Date): ScheduleBatch {
 
 /**
  * Check if equipment can use 23:00 time slot
- * Only pink-marked units are allowed at 23:00
- * For now, we'll need to check equipment properties or zone rules
+ * Only units with canUse2300Slot flag are allowed at 23:00
  */
 export async function canUse2300Slot(equipmentId: string): Promise<boolean> {
-  // TODO: Implement logic to check if equipment is "pink-marked"
-  // For now, return false (default behavior)
-  // This should be based on equipment properties or zone configuration
-  return false
+  const { prisma } = await import('@/lib/prisma')
+  const equipment = await prisma.equipment.findUnique({
+    where: { id: equipmentId },
+    select: { canUse2300Slot: true },
+  })
+  return equipment?.canUse2300Slot || false
 }
 

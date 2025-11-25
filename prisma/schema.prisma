@@ -39,6 +39,8 @@ model Equipment {
   zone            Zone        @relation(fields: [zoneId], references: [id])
   zoneId          String
   active          Boolean     @default(true)
+  // Admin settings
+  canUse2300Slot  Boolean     @default(false) // Units allowed to start at 23:00 (marked in green)
   schedules       Schedule[]
   visits          MaintenanceVisit[]
   zoneMapping     EquipmentZoneMapping? // Admin mapping (zone + week)

@@ -19,6 +19,7 @@ export async function GET() {
         name: true,
         type: true,
         deviceId: true,
+        canUse2300Slot: true,
       },
     })
 
@@ -33,6 +34,7 @@ export async function GET() {
         name: eq.name || eq.equipmentNumber,
         type: eq.type,
         deviceId: eq.deviceId,
+        canUse2300Slot: eq.canUse2300Slot,
         inDatabase: true,
       })
     })
@@ -47,6 +49,7 @@ export async function GET() {
           name: equipmentNumber,
           type: device.device_type?.toUpperCase().includes('ESCALATOR') ? 'ESCALATOR' : 'ELEVATOR',
           deviceId: device.device_id || device.deviceId || null,
+          canUse2300Slot: false,
           inDatabase: false,
         })
       }
