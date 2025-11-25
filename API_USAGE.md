@@ -2,19 +2,21 @@
 
 Quick reference for using the MTR Maintenance Tracking API endpoints.
 
+**Base URL**: http://localhost:3004
+
 ## Sync Endpoints
 
 ### Test Connections (GET)
 
 ```bash
 # Test engineers sync connection
-curl http://localhost:3000/api/sync/engineers
+curl http://localhost:3004/api/sync/engineers
 
 # Test devices sync connection
-curl http://localhost:3000/api/sync/devices
+curl http://localhost:3004/api/sync/devices
 
 # Test visits sync connection
-curl http://localhost:3000/api/sync/visits
+curl http://localhost:3004/api/sync/visits
 ```
 
 ### Sync Data (POST)
@@ -23,17 +25,17 @@ curl http://localhost:3000/api/sync/visits
 
 ```bash
 # Test engineers sync (dry run)
-curl -X POST http://localhost:3000/api/sync/engineers \
+curl -X POST http://localhost:3004/api/sync/engineers \
   -H "Content-Type: application/json" \
   -d '{"dryRun": true}'
 
 # Test devices sync (dry run)
-curl -X POST http://localhost:3000/api/sync/devices \
+curl -X POST http://localhost:3004/api/sync/devices \
   -H "Content-Type: application/json" \
   -d '{"dryRun": true}'
 
 # Test visits sync (dry run)
-curl -X POST http://localhost:3000/api/sync/visits \
+curl -X POST http://localhost:3004/api/sync/visits \
   -H "Content-Type: application/json" \
   -d '{"dryRun": true}'
 ```
@@ -42,17 +44,17 @@ curl -X POST http://localhost:3000/api/sync/visits \
 
 ```bash
 # Sync engineers from Looker
-curl -X POST http://localhost:3000/api/sync/engineers \
+curl -X POST http://localhost:3004/api/sync/engineers \
   -H "Content-Type: application/json" \
   -d '{}'
 
 # Sync devices from Looker
-curl -X POST http://localhost:3000/api/sync/devices \
+curl -X POST http://localhost:3004/api/sync/devices \
   -H "Content-Type: application/json" \
   -d '{}'
 
 # Sync visits from Looker
-curl -X POST http://localhost:3000/api/sync/visits \
+curl -X POST http://localhost:3004/api/sync/visits \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -61,7 +63,7 @@ curl -X POST http://localhost:3000/api/sync/visits \
 
 ```bash
 # Sync engineers and deactivate missing ones
-curl -X POST http://localhost:3000/api/sync/engineers \
+curl -X POST http://localhost:3004/api/sync/engineers \
   -H "Content-Type: application/json" \
   -d '{"deactivateMissing": true}'
 ```
@@ -119,25 +121,25 @@ bash scripts/test-sync.sh
 
 ```bash
 # Get all schedules
-curl http://localhost:3000/api/schedules
+curl http://localhost:3004/api/schedules
 
 # Filter by zone
-curl "http://localhost:3000/api/schedules?zoneId=zone-id"
+curl "http://localhost:3004/api/schedules?zoneId=zone-id"
 
 # Filter by date range
-curl "http://localhost:3000/api/schedules?from=2025-01-01&to=2025-01-31"
+curl "http://localhost:3004/api/schedules?from=2025-01-01&to=2025-01-31"
 
 # Filter by status
-curl "http://localhost:3000/api/schedules?status=PLANNED"
+curl "http://localhost:3004/api/schedules?status=PLANNED"
 
 # Combine filters
-curl "http://localhost:3000/api/schedules?zoneId=zone-id&from=2025-01-01&to=2025-01-31&status=PLANNED"
+curl "http://localhost:3004/api/schedules?zoneId=zone-id&from=2025-01-01&to=2025-01-31&status=PLANNED"
 ```
 
 ### Create Schedule (POST)
 
 ```bash
-curl -X POST http://localhost:3000/api/schedules \
+curl -X POST http://localhost:3004/api/schedules \
   -H "Content-Type: application/json" \
   -d '{
     "equipmentId": "equipment-id",
@@ -154,13 +156,13 @@ curl -X POST http://localhost:3000/api/schedules \
 ### Get Single Schedule (GET)
 
 ```bash
-curl http://localhost:3000/api/schedules/schedule-id
+curl http://localhost:3004/api/schedules/schedule-id
 ```
 
 ### Update Schedule (PUT)
 
 ```bash
-curl -X PUT http://localhost:3000/api/schedules/schedule-id \
+curl -X PUT http://localhost:3004/api/schedules/schedule-id \
   -H "Content-Type: application/json" \
   -d '{
     "r1PlannedDate": "2025-11-03T23:00:00Z",
@@ -171,13 +173,13 @@ curl -X PUT http://localhost:3000/api/schedules/schedule-id \
 ### Delete Schedule (DELETE)
 
 ```bash
-curl -X DELETE http://localhost:3000/api/schedules/schedule-id
+curl -X DELETE http://localhost:3004/api/schedules/schedule-id
 ```
 
 ### Bulk Create Schedules (POST)
 
 ```bash
-curl -X POST http://localhost:3000/api/schedules/bulk-create \
+curl -X POST http://localhost:3004/api/schedules/bulk-create \
   -H "Content-Type: application/json" \
   -d '{
     "equipmentIds": ["equipment-id-1", "equipment-id-2"],

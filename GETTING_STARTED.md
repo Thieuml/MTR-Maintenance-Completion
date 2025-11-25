@@ -2,14 +2,14 @@
 
 ## 🚀 Local Development URL
 
-**Development Server**: http://localhost:3000
+**Development Server**: http://localhost:3004
 
 Start the dev server:
 ```bash
 npm run dev
 ```
 
-Then open your browser to: **http://localhost:3000**
+Then open your browser to: **http://localhost:3004**
 
 ## ✅ What's Been Completed
 
@@ -56,7 +56,7 @@ npm run setup:novu
 npm run dev
 ```
 
-Visit: **http://localhost:3000**
+Visit: **http://localhost:3004**
 
 ### Phase 1: Data Sync (Priority: High)
 
@@ -125,7 +125,7 @@ npm run db:studio      # Open Prisma Studio (view database)
 
 ### Development
 ```bash
-npm run dev            # Start dev server (http://localhost:3000)
+npm run dev            # Start dev server (http://localhost:3004)
 npm run build          # Build for production
 npm run lint           # Run ESLint
 ```
@@ -170,12 +170,12 @@ Opens Prisma Studio - you should see:
 
 ### 2. Check API Health
 ```bash
-curl http://localhost:3000/api/health
+curl http://localhost:3004/api/health
 ```
 Should return: `{"status":"ok","timestamp":"..."}`
 
 ### 3. View Home Page
-Open: http://localhost:3000
+Open: http://localhost:3004
 Should see: "MTR Maintenance Tracking" homepage
 
 ## 📚 Documentation
@@ -196,7 +196,7 @@ Should see: "MTR Maintenance Tracking" homepage
 - [ ] Add Novu API key to `.env.local`
 - [ ] Run `npm run setup:novu`
 - [ ] Run `npm run dev`
-- [ ] Visit http://localhost:3000
+- [ ] Visit http://localhost:3004
 - [ ] Start building Phase 1 features
 
 ---
