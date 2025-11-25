@@ -292,23 +292,123 @@ async function main() {
     // All schedule data from images should be added here for complete seeding
     // This includes all weeks (45-48) and all zones (MTR-01 through MTR-06)
     
-    // MTR-04 (Week 45, Batch A) - Sample entries (needs completion)
+    // MTR-04 (Week 45, Batch A) - Complete from image
     { zoneCode: 'MTR-04', week: 45, batch: 'A', date: '2024-11-04', timeSlot: 'SLOT_2300', equipmentNumber: 'TSY-FL05', orNumber: '5000359346', deadline: '18-Nov' },
     { zoneCode: 'MTR-04', week: 45, batch: 'A', date: '2024-11-04', timeSlot: 'SLOT_0130', equipmentNumber: 'TSY-E02', orNumber: '5000360926', deadline: '18-Nov' },
     { zoneCode: 'MTR-04', week: 45, batch: 'A', date: '2024-11-04', timeSlot: 'SLOT_0330', equipmentNumber: 'TSY-SL13', orNumber: '5000360927', deadline: '18-Nov' },
+    { zoneCode: 'MTR-04', week: 45, batch: 'A', date: '2024-11-05', timeSlot: 'SLOT_2300', equipmentNumber: 'TSY-OCC-FL11', orNumber: '5000359349', deadline: '19-Nov' },
+    { zoneCode: 'MTR-04', week: 45, batch: 'A', date: '2024-11-05', timeSlot: 'SLOT_0130', equipmentNumber: 'TSY-E03', orNumber: '5000360928', deadline: '19-Nov' },
     
-    // MTR-05 (Week 45, Batch A) - Sample entries (needs completion)
+    // MTR-04 (Week 46, Batch B) - Complete from image
+    { zoneCode: 'MTR-04', week: 46, batch: 'B', date: '2024-11-09', timeSlot: 'SLOT_2300', equipmentNumber: 'TSY-E04', orNumber: '5000363553', deadline: '20-Nov' },
+    { zoneCode: 'MTR-04', week: 46, batch: 'B', date: '2024-11-09', timeSlot: 'SLOT_0130', equipmentNumber: 'TSY-SL04', orNumber: '5000363554', deadline: '20-Nov' },
+    { zoneCode: 'MTR-04', week: 46, batch: 'B', date: '2024-11-10', timeSlot: 'SLOT_2300', equipmentNumber: 'TSY-E05', orNumber: '5000365268', deadline: '21-Nov' },
+    { zoneCode: 'MTR-04', week: 46, batch: 'B', date: '2024-11-10', timeSlot: 'SLOT_0130', equipmentNumber: 'TSY-SL05', orNumber: '5000365269', deadline: '21-Nov' },
+    
+    // MTR-04 (Week 47, Batch A) - Complete from image
+    { zoneCode: 'MTR-04', week: 47, batch: 'A', date: '2024-11-16', timeSlot: 'SLOT_2300', equipmentNumber: 'TSY-FL05', orNumber: '5000388220', deadline: '30-Nov' },
+    { zoneCode: 'MTR-04', week: 47, batch: 'A', date: '2024-11-16', timeSlot: 'SLOT_0130', equipmentNumber: 'TSY-E02', orNumber: '5000388221', deadline: '30-Nov' },
+    { zoneCode: 'MTR-04', week: 47, batch: 'A', date: '2024-11-16', timeSlot: 'SLOT_0330', equipmentNumber: 'TSY-SL13', orNumber: '5000388222', deadline: '30-Nov' },
+    
+    // MTR-04 (Week 48, Batch B) - Complete from image
+    { zoneCode: 'MTR-04', week: 48, batch: 'B', date: '2024-11-23', timeSlot: 'SLOT_2300', equipmentNumber: 'TSY-SL04', orNumber: '5000392549', deadline: '05-Dec' },
+    { zoneCode: 'MTR-04', week: 48, batch: 'B', date: '2024-11-23', timeSlot: 'SLOT_0130', equipmentNumber: 'TSY-E04', orNumber: '5000392550', deadline: '05-Dec' },
+    
+    // MTR-05 (Week 45, Batch A) - Complete from image
     { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-02', timeSlot: 'SLOT_0130', equipmentNumber: 'LHP-E03', orNumber: '5000507882', deadline: '16-Nov' },
     { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-02', timeSlot: 'SLOT_0330', equipmentNumber: 'LHP-E04', orNumber: '5000507887', deadline: '16-Nov' },
     { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-03', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-FL04', orNumber: '5000355443', deadline: '16-Nov' },
     { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-03', timeSlot: 'SLOT_0330', equipmentNumber: 'OLY-CE01', orNumber: '5000357828', deadline: '17-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-04', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-CE02', orNumber: '5000357826', deadline: '17-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-05', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-FL01', orNumber: '5000355444', deadline: '16-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-05', timeSlot: 'SLOT_0330', equipmentNumber: 'OLY-E03', orNumber: '5000355452', deadline: '16-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-06', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-E04', orNumber: '5000355442', deadline: '16-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-06', timeSlot: 'SLOT_0330', equipmentNumber: 'LAK-L04', orNumber: '5000507892', deadline: '17-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-07', timeSlot: 'SLOT_0130', equipmentNumber: 'LAK-L05', orNumber: '5000507898', deadline: '20-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-07', timeSlot: 'SLOT_0330', equipmentNumber: 'OLY-E01', orNumber: '5000366908', deadline: '23-Nov' },
+    { zoneCode: 'MTR-05', week: 45, batch: 'A', date: '2024-11-08', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-E02', orNumber: '5000366912', deadline: '23-Nov' },
     
-    // MTR-06 (Week 45, Batch A) - Sample entries (needs completion)
+    // MTR-05 (Week 46, Batch B) - Complete from image
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-09', timeSlot: 'SLOT_0130', equipmentNumber: 'LHP-E01', orNumber: '5000507871', deadline: '23-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-09', timeSlot: 'SLOT_0330', equipmentNumber: 'LHP-E02', orNumber: '5000507877', deadline: '23-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-10', timeSlot: 'SLOT_0130', equipmentNumber: 'DIS-E01', orNumber: '5000371979', deadline: '26-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-10', timeSlot: 'SLOT_0330', equipmentNumber: 'DIS-E02', orNumber: '5000371976', deadline: '26-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-11', timeSlot: 'SLOT_0130', equipmentNumber: 'DIS-PL01', orNumber: '5000377001', deadline: '28-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-12', timeSlot: 'SLOT_0130', equipmentNumber: 'SUN-E05', orNumber: '5000375321', deadline: '27-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-12', timeSlot: 'SLOT_0330', equipmentNumber: 'SUN-E08', orNumber: '5000375322', deadline: '27-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-13', timeSlot: 'SLOT_0130', equipmentNumber: 'SUN-PL01', orNumber: '5000375328', deadline: '27-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-13', timeSlot: 'SLOT_0330', equipmentNumber: 'SUN-PL02', orNumber: '5000375332', deadline: '27-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-14', timeSlot: 'SLOT_0130', equipmentNumber: 'SUN-E01', orNumber: '5000377011', deadline: '28-Nov' },
+    { zoneCode: 'MTR-05', week: 46, batch: 'B', date: '2024-11-14', timeSlot: 'SLOT_0330', equipmentNumber: 'SUN-E03', orNumber: '5000377015', deadline: '28-Nov' },
+    
+    // MTR-05 (Week 47, Batch A) - Complete from image
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-16', timeSlot: 'SLOT_0130', equipmentNumber: 'LHP-E03', orNumber: '5000532509', deadline: '30-Nov' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-16', timeSlot: 'SLOT_0330', equipmentNumber: 'LHP-E04', orNumber: '5000532630', deadline: '30-Nov' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-17', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-FL04', orNumber: '5000384109', deadline: '30-Nov' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-17', timeSlot: 'SLOT_0330', equipmentNumber: 'OLY-CE01', orNumber: '5000386797', deadline: '01-Dec' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-18', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-CE02', orNumber: '5000386804', deadline: '01-Dec' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-19', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-FL01', orNumber: '5000384111', deadline: '30-Nov' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-19', timeSlot: 'SLOT_0330', equipmentNumber: 'OLY-E03', orNumber: '5000377002', deadline: '28-Nov' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-20', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-E04', orNumber: '5000384104', deadline: '30-Nov' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-20', timeSlot: 'SLOT_0330', equipmentNumber: 'LAK-L04', orNumber: '5000537663', deadline: '01-Dec' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-21', timeSlot: 'SLOT_0130', equipmentNumber: 'LAK-L05', orNumber: '5000546234', deadline: '04-Dec' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-21', timeSlot: 'SLOT_0330', equipmentNumber: 'OLY-E01', orNumber: '5000394301', deadline: '07-Dec' },
+    { zoneCode: 'MTR-05', week: 47, batch: 'A', date: '2024-11-22', timeSlot: 'SLOT_0130', equipmentNumber: 'OLY-E02', orNumber: '5000394319', deadline: '07-Dec' },
+    
+    // MTR-05 (Week 48, Batch B) - Complete from image
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-23', timeSlot: 'SLOT_0130', equipmentNumber: 'LHP-E01', orNumber: '5000561444', deadline: '07-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-23', timeSlot: 'SLOT_0330', equipmentNumber: 'LHP-E02', orNumber: '5000561436', deadline: '07-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-24', timeSlot: 'SLOT_0130', equipmentNumber: 'DIS-E01', orNumber: '5000400185', deadline: '10-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-24', timeSlot: 'SLOT_0330', equipmentNumber: 'DIS-E02', orNumber: '5000400179', deadline: '10-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-25', timeSlot: 'SLOT_0130', equipmentNumber: 'DIS-PL01', orNumber: '5000407686', deadline: '12-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-26', timeSlot: 'SLOT_0130', equipmentNumber: 'SUN-E05', orNumber: '5000405831', deadline: '11-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-26', timeSlot: 'SLOT_0330', equipmentNumber: 'SUN-E08', orNumber: '5000405836', deadline: '11-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-27', timeSlot: 'SLOT_0130', equipmentNumber: 'SUN-PL01', orNumber: '5000405840', deadline: '11-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-27', timeSlot: 'SLOT_0330', equipmentNumber: 'SUN-PL02', orNumber: '5000405835', deadline: '11-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-28', timeSlot: 'SLOT_0130', equipmentNumber: 'SUN-E01', orNumber: '5000407695', deadline: '12-Dec' },
+    { zoneCode: 'MTR-05', week: 48, batch: 'B', date: '2024-11-28', timeSlot: 'SLOT_0330', equipmentNumber: 'SUN-E03', orNumber: '5000407693', deadline: '12-Dec' },
+    
+    // MTR-06 (Week 45, Batch A) - Complete from image
     { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-02', timeSlot: 'SLOT_0130', equipmentNumber: 'AWE-E03', orNumber: '5000357821', deadline: '17-Nov' },
     { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-03', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-FL01', orNumber: '5000357819', deadline: '17-Nov' },
     { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-03', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-E07', orNumber: '5000357827', deadline: '17-Nov' },
     { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-04', timeSlot: 'SLOT_0130', equipmentNumber: 'TUM-E13', orNumber: '5000449744', deadline: '17-Nov' },
     { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-04', timeSlot: 'SLOT_0330', equipmentNumber: 'TUM-E14', orNumber: '5000449773', deadline: '17-Nov' },
+    { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-06', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-E05', orNumber: '5000363550', deadline: '20-Nov' },
+    { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-06', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-E06', orNumber: '5000363562', deadline: '20-Nov' },
+    { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-07', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-E03', orNumber: '5000365269', deadline: '21-Nov' },
+    { zoneCode: 'MTR-06', week: 45, batch: 'A', date: '2024-11-07', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-E04', orNumber: '5000365279', deadline: '21-Nov' },
+    
+    // MTR-06 (Week 46, Batch B) - Complete from image
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-09', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-AE01', orNumber: '5000365277', deadline: '21-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-09', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-AE02', orNumber: '5000365273', deadline: '21-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-10', timeSlot: 'SLOT_0130', equipmentNumber: 'AWE-E01', orNumber: '5000368589', deadline: '24-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-10', timeSlot: 'SLOT_0330', equipmentNumber: 'AWE-E02', orNumber: '5000368596', deadline: '24-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-11', timeSlot: 'SLOT_0130', equipmentNumber: 'TUM-E12', orNumber: '5000462052', deadline: '24-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-14', timeSlot: 'SLOT_0130', equipmentNumber: 'AIR-FL01', orNumber: '5000377005', deadline: '28-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-14', timeSlot: 'SLOT_0330', equipmentNumber: 'AIR-FL02', orNumber: '5000377014', deadline: '28-Nov' },
+    { zoneCode: 'MTR-06', week: 46, batch: 'B', date: '2024-11-14', timeSlot: 'SLOT_0330', equipmentNumber: 'AIR-SL03', orNumber: '5000377018', deadline: '28-Nov' },
+    
+    // MTR-06 (Week 47, Batch A) - Complete from image
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-16', timeSlot: 'SLOT_0130', equipmentNumber: 'AWE-E03', orNumber: '5000386801', deadline: '01-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-17', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-FL01', orNumber: '5000386795', deadline: '01-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-17', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-E07', orNumber: '5000386793', deadline: '01-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-18', timeSlot: 'SLOT_0130', equipmentNumber: 'TUM-E13', orNumber: '5000541356', deadline: '01-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-18', timeSlot: 'SLOT_0330', equipmentNumber: 'TUM-E14', orNumber: '5000541351', deadline: '01-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-20', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-E05', orNumber: '5000391033', deadline: '04-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-20', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-E06', orNumber: '5000391032', deadline: '04-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-21', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-E03', orNumber: '5000392551', deadline: '05-Dec' },
+    { zoneCode: 'MTR-06', week: 47, batch: 'A', date: '2024-11-21', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-E04', orNumber: '5000392550', deadline: '05-Dec' },
+    
+    // MTR-06 (Week 48, Batch B) - Complete from image
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-23', timeSlot: 'SLOT_0130', equipmentNumber: 'TUC-AE01', orNumber: '5000392558', deadline: '05-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-23', timeSlot: 'SLOT_0330', equipmentNumber: 'TUC-AE02', orNumber: '5000392554', deadline: '05-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-24', timeSlot: 'SLOT_0130', equipmentNumber: 'AWE-E01', orNumber: '5000396109', deadline: '08-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-24', timeSlot: 'SLOT_0330', equipmentNumber: 'AWE-E02', orNumber: '5000396115', deadline: '08-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-25', timeSlot: 'SLOT_0130', equipmentNumber: 'TUM-E12', orNumber: '5000574488', deadline: '08-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-28', timeSlot: 'SLOT_0130', equipmentNumber: 'AIR-FL01', orNumber: '5000407688', deadline: '12-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-28', timeSlot: 'SLOT_0330', equipmentNumber: 'AIR-FL02', orNumber: '5000407691', deadline: '12-Dec' },
+    { zoneCode: 'MTR-06', week: 48, batch: 'B', date: '2024-11-28', timeSlot: 'SLOT_0330', equipmentNumber: 'AIR-SL03', orNumber: '5000407697', deadline: '12-Dec' },
   ]
 
   // Create equipment map to avoid duplicates
