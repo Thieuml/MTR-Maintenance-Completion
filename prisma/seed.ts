@@ -535,13 +535,33 @@ async function main() {
       continue
     }
 
-    // Parse date and map to 2025
-    // Simple: same calendar date, different year
-    // Nov 25, 2024 → Nov 25, 2025
+    // Parse date and map to corresponding week in 2025 based on week number
+    // Use the week number from seed data to map correctly:
+    // Week 48 → current week (Nov 23-29, 2025)
+    // Week 47 → 1 week ago (Nov 16-22, 2025)
+    // Week 46 → 2 weeks ago (Nov 9-15, 2025)
+    // Week 45 → 3 weeks ago (Nov 2-8, 2025)
     const [year, month, day] = schedule.date.split('-').map(Number)
+    const originalDate = new Date(year, month - 1, day)
     
-    // Create adjusted date: same month/day, year 2025
-    const adjustedDate = new Date(2025, month - 1, day)
+    // Get the week number from seed data (45, 46, 47, or 48)
+    const weekNumber = schedule.week
+    
+    // Calculate weeks ago from current week (48)
+    const weeksAgo = 48 - weekNumber
+    
+    // Current week Sunday (Nov 23, 2025 is Sunday, so currentWeekSunday = Nov 23)
+    const currentWeekSunday = new Date(2025, 10, 23)
+    currentWeekSunday.setDate(currentWeekSunday.getDate() - currentWeekSunday.getDay()) // Get Sunday
+    
+    // Calculate target week Sunday
+    const targetWeekSunday = new Date(currentWeekSunday)
+    targetWeekSunday.setDate(currentWeekSunday.getDate() - (weeksAgo * 7))
+    
+    // Add the day of week offset (0=Sunday, 1=Monday, etc.)
+    const dayOfWeekOffset = originalDate.getDay()
+    const adjustedDate = new Date(targetWeekSunday)
+    adjustedDate.setDate(targetWeekSunday.getDate() + dayOfWeekOffset)
     
     let hour = 0
     let minute = 0
