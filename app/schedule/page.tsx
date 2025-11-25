@@ -19,12 +19,12 @@ export default function SchedulePage() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    // Get Sunday of current week
-    const currentWeekStart = new Date(today)
-    const dayOfWeek = today.getDay()
-    currentWeekStart.setDate(today.getDate() - dayOfWeek)
-
     if (viewMode === 'week') {
+      // Get Sunday of current week
+      const currentWeekStart = new Date(today)
+      const dayOfWeek = today.getDay()
+      currentWeekStart.setDate(today.getDate() - dayOfWeek)
+
       // Show one week starting from Sunday
       const weekStart = new Date(currentWeekStart)
       weekStart.setDate(weekStart.getDate() + dateOffset * 7)
@@ -39,14 +39,22 @@ export default function SchedulePage() {
         displayRange: `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
       }
     } else {
-      // Show one month
-      const monthStart = new Date(today.getFullYear(), today.getMonth() + dateOffset, 1)
-      // Get first Sunday of the month
-      const firstSunday = new Date(monthStart)
-      firstSunday.setDate(firstSunday.getDate() - firstSunday.getDay())
+      // Show actual calendar month (not rolling)
+      const targetMonth = today.getMonth() + dateOffset
+      const targetYear = today.getFullYear() + Math.floor(targetMonth / 12)
+      const normalizedMonth = ((targetMonth % 12) + 12) % 12
 
-      // Get last day of month and find last Saturday
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + dateOffset + 1, 0)
+      // First day of the month
+      const monthStart = new Date(targetYear, normalizedMonth, 1)
+      
+      // Get first Sunday of the calendar view (may be before month start)
+      const firstSunday = new Date(monthStart)
+      firstSunday.setDate(firstSunday.getDate() - monthStart.getDay())
+
+      // Last day of the month
+      const lastDay = new Date(targetYear, normalizedMonth + 1, 0)
+      
+      // Get last Saturday of the calendar view (may be after month end)
       const lastSaturday = new Date(lastDay)
       lastSaturday.setDate(lastSaturday.getDate() + (6 - lastDay.getDay()))
       lastSaturday.setHours(23, 59, 59, 999)
