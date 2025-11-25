@@ -24,13 +24,6 @@ interface ScheduleCardProps {
 }
 
 export function ScheduleCard({ schedule, onClick }: ScheduleCardProps) {
-  // Get time slot display
-  const timeSlotDisplay = {
-    SLOT_2300: '23:00',
-    SLOT_0130: '01:30',
-    SLOT_0330: '03:30',
-  }[schedule.timeSlot]
-
   // Status color coding
   const statusColors: Record<string, string> = {
     PLANNED: 'bg-gray-100 border-gray-300',
@@ -46,74 +39,35 @@ export function ScheduleCard({ schedule, onClick }: ScheduleCardProps) {
 
   const statusColor = statusColors[schedule.status] || 'bg-gray-100 border-gray-300'
 
-  // Format date
-  const date = new Date(schedule.r1PlannedDate)
-  const dateStr = date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
+  // Show batch as "A" or "B-Week"
+  const batchDisplay = schedule.batch === 'B' ? 'B-Week' : schedule.batch
 
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-lg border-2 ${statusColor} cursor-pointer hover:shadow-md transition-shadow ${
+      className={`p-1.5 rounded border ${statusColor} cursor-pointer hover:shadow-sm transition-shadow text-xs ${
         !schedule.fixedEngineer && !schedule.rotatingEngineer
           ? 'border-dashed border-pink-400 bg-pink-50'
           : ''
       }`}
     >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1">
-          <div className="font-semibold text-sm text-gray-900">
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-gray-900 truncate">
             {schedule.equipment.equipmentNumber}
           </div>
-          <div className="text-xs text-gray-600">{schedule.zone.code}</div>
+          {schedule.workOrderNumber && (
+            <div className="text-[10px] text-gray-600 font-mono truncate">
+              {schedule.workOrderNumber}
+            </div>
+          )}
         </div>
-        <div className="text-xs font-medium text-gray-700">
-          {schedule.batch}
+        <div className="flex-shrink-0">
+          <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">
+            {batchDisplay}
+          </span>
         </div>
-      </div>
-
-      <div className="space-y-1 text-xs">
-        <div className="flex items-center gap-1 text-gray-700">
-          <span className="font-medium">Time:</span>
-          <span>{timeSlotDisplay}</span>
-        </div>
-        {schedule.workOrderNumber && (
-          <div className="flex items-center gap-1 text-gray-600">
-            <span className="font-medium">OR:</span>
-            <span className="font-mono">{schedule.workOrderNumber}</span>
-          </div>
-        )}
-        {schedule.fixedEngineer && (
-          <div className="flex items-center gap-1">
-            <span className="text-gray-600">Fixed:</span>
-            <span className="font-medium text-blue-700">
-              {schedule.fixedEngineer.name}
-            </span>
-          </div>
-        )}
-        {schedule.rotatingEngineer && (
-          <div className="flex items-center gap-1">
-            <span className="text-gray-600">Rotating:</span>
-            <span className="font-medium text-green-700">
-              {schedule.rotatingEngineer.name}
-            </span>
-          </div>
-        )}
-        {!schedule.fixedEngineer && !schedule.rotatingEngineer && (
-          <div className="text-pink-600 font-medium text-xs">
-            Unassigned
-          </div>
-        )}
-      </div>
-
-      <div className="mt-2 pt-2 border-t border-gray-200">
-        <span className="text-xs font-medium text-gray-600">
-          {schedule.status.replace('_', ' ')}
-        </span>
       </div>
     </div>
   )
 }
-
