@@ -8,10 +8,10 @@ echo "🔧 Setting up MTR Maintenance Tracking environment variables..."
 echo ""
 
 # Database URL (PostgreSQL)
+# Using same database as shiftproto project
 if [ -z "$DATABASE_URL" ]; then
-    echo "⚠️  DATABASE_URL not set. Please set it manually:"
-    echo "   export DATABASE_URL=\"postgresql://user:password@host:5432/database?sslmode=require\""
-    echo ""
+    export DATABASE_URL="postgresql://neondb_owner:npg_CiquK26stvbx@ep-late-bar-a4a9pbg5-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    echo "✅ DATABASE_URL set (using same database as shiftproto)"
 else
     echo "✅ DATABASE_URL is set"
 fi
