@@ -19,6 +19,8 @@ model Zone {
   active      Boolean     @default(true)
   equipment   Equipment[]
   schedules   Schedule[]
+  equipmentMappings EquipmentZoneMapping[]
+  engineerAssignments ZoneEngineerAssignment[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -39,6 +41,7 @@ model Equipment {
   active          Boolean     @default(true)
   schedules       Schedule[]
   visits          MaintenanceVisit[]
+  zoneMapping     EquipmentZoneMapping? // Admin mapping (zone + week)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 }
@@ -64,8 +67,9 @@ model Engineer {
   fixedSchedules      Schedule[]         @relation("FixedEngineerSchedules")
   rotatingSchedules   Schedule[]         @relation("RotatingEngineerSchedules")
   visits              MaintenanceVisit[]
+  zoneAssignments     ZoneEngineerAssignment[]
   createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  updatedAt           DateTime           @default(now()) @updatedAt
 }
 
 enum EngineerRole {
@@ -230,5 +234,46 @@ enum RescheduleStatus {
   APPROVED          // Approved by MTR
   REJECTED          // Rejected by MTR
   COMPLETED         // Rescheduled and completed
+}
+
+// Equipment-Zone-Week Mapping (Admin Configuration)
+// Only equipment with both zone and week mapping appear in schedules
+model EquipmentZoneMapping {
+  id              String      @id @default(cuid())
+  equipment       Equipment   @relation(fields: [equipmentId], references: [id])
+  equipmentId     String      @unique
+  zone            Zone        @relation(fields: [zoneId], references: [id])
+  zoneId          String
+  batch           ScheduleBatch // A or B week assignment
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdBy       String?     // Admin who created the mapping
+  
+  @@index([zoneId, batch])
+  @@index([equipmentId])
+}
+
+// Zone Engineer Assignments (Admin Configuration)
+model ZoneEngineerAssignment {
+  id              String      @id @default(cuid())
+  zone            Zone        @relation(fields: [zoneId], references: [id])
+  zoneId          String
+  engineer        Engineer    @relation(fields: [engineerId], references: [id])
+  engineerId      String
+  role            ZoneEngineerRole // FIXED_QUALIFIED or FIXED
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdBy       String?     // Admin who created the assignment
+  
+  @@unique([zoneId, engineerId])
+  @@index([zoneId])
+  @@index([engineerId])
+}
+
+enum ZoneEngineerRole {
+  FIXED_QUALIFIED // Fixed engineer with CP & RW certificates (qualified personnel)
+  FIXED           // Other fixed engineers assigned to zone
 }
 
