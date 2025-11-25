@@ -5,6 +5,16 @@
  * - Look ID 160: Engineers list (filtered on HK)
  * - Look ID 167: MTR devices list
  * - Look ID 168: Maintenance visits from last 3 months
+ * 
+ * Additional Looks (to be configured):
+ * - Historical maintenance visits (6+ months for compliance reporting)
+ * - Work orders (OR numbers) from EAMS
+ * - Engineer certifications (CP & RW)
+ * - Equipment status
+ * - Buildings/locations
+ * - Contract information
+ * 
+ * See LOOKER_LOOKS.md for detailed documentation of each Look ID.
  */
 
 import { Looker40SDK } from '@looker/sdk'
@@ -144,6 +154,72 @@ export async function fetchMTRDevicesFromLooker(): Promise<any[]> {
  */
 export async function fetchMaintenanceVisitsFromLooker(): Promise<any[]> {
   const lookId = process.env.LOOKER_VISITS_LOOK_ID || '168'
+  return fetchDataFromLooker(lookId)
+}
+
+/**
+ * Fetch historical maintenance visits from Looker (for compliance reporting)
+ */
+export async function fetchHistoricalMaintenanceVisitsFromLooker(): Promise<any[]> {
+  const lookId = process.env.LOOKER_VISITS_HISTORICAL_LOOK_ID || process.env.LOOKER_VISITS_LOOK_ID || '168'
+  return fetchDataFromLooker(lookId)
+}
+
+/**
+ * Fetch work orders (OR numbers) from Looker
+ */
+export async function fetchWorkOrdersFromLooker(): Promise<any[]> {
+  const lookId = process.env.LOOKER_WORK_ORDERS_LOOK_ID
+  if (!lookId) {
+    throw new Error('LOOKER_WORK_ORDERS_LOOK_ID environment variable is not set')
+  }
+  return fetchDataFromLooker(lookId)
+}
+
+/**
+ * Fetch engineer certifications from Looker
+ */
+export async function fetchEngineerCertificationsFromLooker(): Promise<any[]> {
+  const lookId = process.env.LOOKER_ENGINEER_CERTIFICATIONS_LOOK_ID
+  if (!lookId) {
+    // Fallback to engineers Look if certifications are included there
+    return fetchEngineersFromLooker()
+  }
+  return fetchDataFromLooker(lookId)
+}
+
+/**
+ * Fetch equipment status from Looker
+ */
+export async function fetchEquipmentStatusFromLooker(): Promise<any[]> {
+  const lookId = process.env.LOOKER_EQUIPMENT_STATUS_LOOK_ID
+  if (!lookId) {
+    // Fallback to devices Look if status is included there
+    return fetchMTRDevicesFromLooker()
+  }
+  return fetchDataFromLooker(lookId)
+}
+
+/**
+ * Fetch buildings/locations from Looker
+ */
+export async function fetchBuildingsFromLooker(): Promise<any[]> {
+  const lookId = process.env.LOOKER_BUILDINGS_LOOK_ID
+  if (!lookId) {
+    // Fallback to devices Look if building data is included there
+    return fetchMTRDevicesFromLooker()
+  }
+  return fetchDataFromLooker(lookId)
+}
+
+/**
+ * Fetch contract information from Looker
+ */
+export async function fetchContractInfoFromLooker(): Promise<any[]> {
+  const lookId = process.env.LOOKER_CONTRACT_INFO_LOOK_ID
+  if (!lookId) {
+    throw new Error('LOOKER_CONTRACT_INFO_LOOK_ID environment variable is not set')
+  }
   return fetchDataFromLooker(lookId)
 }
 

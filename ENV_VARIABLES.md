@@ -41,15 +41,58 @@ NOVU_API_HOSTNAME="https://eu.api.novu.co"
 
 ### Looker Look IDs
 
+#### Required (Currently Configured)
+
 ```bash
+# Engineers list (filtered on HK)
+# Purpose: Sync active engineers for assignment and notifications
 LOOKER_ENGINEERS_LOOK_ID=160
+
+# MTR devices/equipment list
+# Purpose: Get all MTR lifts and escalators for schedule creation
 LOOKER_DEVICES_LOOK_ID=167
+
+# Maintenance visits (last 3 months)
+# Purpose: Track recent maintenance completions and compliance
 LOOKER_VISITS_LOOK_ID=168
 ```
 
+#### Additional (To Be Configured)
+
+```bash
+# Historical maintenance visits (6+ months)
+# Purpose: Compliance reporting, engineer behavior analysis (US15, US16)
+# Note: May use same Look as 168 with extended date range
+LOOKER_VISITS_HISTORICAL_LOOK_ID=
+
+# Work orders (OR numbers) from EAMS
+# Purpose: Bulk import OR numbers for yearly scheduling
+# Note: Currently downloaded manually monthly
+LOOKER_WORK_ORDERS_LOOK_ID=
+
+# Engineer certifications (CP & RW)
+# Purpose: Validate engineer assignments (fixed engineer must have certs)
+# Note: May be included in Engineers Look (160)
+LOOKER_ENGINEER_CERTIFICATIONS_LOOK_ID=
+
+# Equipment status
+# Purpose: Filter active equipment, identify unavailable units
+LOOKER_EQUIPMENT_STATUS_LOOK_ID=
+
+# Buildings/locations
+# Purpose: Zone assignment, location-based filtering and reporting
+# Note: May be included in Devices Look (167)
+LOOKER_BUILDINGS_LOOK_ID=
+
+# Contract information
+# Purpose: Validate service windows, track contract compliance
+LOOKER_CONTRACT_INFO_LOOK_ID=
+```
+
 **Description**: Look IDs for syncing data from Looker  
-**Default**: Values shown above  
-**When to change**: If you need to use different Looks
+**Default**: Values shown above for required Looks  
+**When to change**: If you need to use different Looks or configure additional ones  
+**See**: `LOOKER_LOOKS.md` for detailed documentation of each Look ID and its purpose
 
 ## Quick Setup Commands
 
@@ -69,13 +112,33 @@ export NOVU_API_HOSTNAME="https://eu.api.novu.co"
 Create `.env.local` in project root:
 
 ```bash
+# Database
 DATABASE_URL=postgresql://...
+
+# Looker API
 LOOKER_API_BASE_URL=https://...
 LOOKER_CLIENT_ID=...
 LOOKER_CLIENT_SECRET=...
+
+# Looker Look IDs (required)
+LOOKER_ENGINEERS_LOOK_ID=160
+LOOKER_DEVICES_LOOK_ID=167
+LOOKER_VISITS_LOOK_ID=168
+
+# Looker Look IDs (optional - to be configured)
+LOOKER_VISITS_HISTORICAL_LOOK_ID=
+LOOKER_WORK_ORDERS_LOOK_ID=
+LOOKER_ENGINEER_CERTIFICATIONS_LOOK_ID=
+LOOKER_EQUIPMENT_STATUS_LOOK_ID=
+LOOKER_BUILDINGS_LOOK_ID=
+LOOKER_CONTRACT_INFO_LOOK_ID=
+
+# Novu API
 NOVU_API_KEY=...
 NOVU_API_HOSTNAME=https://eu.api.novu.co
 ```
+
+**See**: `LOOKER_LOOKS.md` for detailed documentation of each Look ID and its purpose
 
 ### Using Setup Script
 
