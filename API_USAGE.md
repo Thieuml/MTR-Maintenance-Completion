@@ -207,5 +207,94 @@ After syncing data:
    - Use bulk-create to generate schedules for equipment
    - Or create individual schedules via POST /api/schedules
 
-4. **Proceed to Phase 3**: Engineer Assignment API
+## Engineer Assignment Endpoints
+
+### List Engineers (GET)
+
+```bash
+# Get all engineers
+curl http://localhost:3004/api/engineers
+
+# Filter by active status
+curl "http://localhost:3004/api/engineers?active=true"
+
+# Filter engineers with certificates (CP & RW)
+curl "http://localhost:3004/api/engineers?hasCertificates=true"
+
+# Search by name
+curl "http://localhost:3004/api/engineers?search=Yip"
+
+# Filter by zone (engineers with schedules in that zone)
+curl "http://localhost:3004/api/engineers?zoneId=zone-id"
+```
+
+### Get Engineer Workload (GET)
+
+```bash
+curl "http://localhost:3004/api/engineers/engineer-id/workload?from=2025-01-01T00:00:00Z&to=2025-12-31T00:00:00Z"
+```
+
+### Assign Engineer to Schedule (POST)
+
+```bash
+# Assign as fixed engineer (must have CP & RW certs)
+curl -X POST http://localhost:3004/api/schedules/schedule-id/assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "engineerId": "engineer-id",
+    "role": "fixed"
+  }'
+
+# Assign as rotating engineer
+curl -X POST http://localhost:3004/api/schedules/schedule-id/assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "engineerId": "engineer-id",
+    "role": "rotating"
+  }'
+```
+
+### Unassign Engineer from Schedule (POST)
+
+```bash
+# Unassign all engineers
+curl -X POST http://localhost:3004/api/schedules/schedule-id/unassign \
+  -H "Content-Type: application/json" \
+  -d '{"role": "all"}'
+
+# Unassign fixed engineer only
+curl -X POST http://localhost:3004/api/schedules/schedule-id/unassign \
+  -H "Content-Type: application/json" \
+  -d '{"role": "fixed"}'
+
+# Unassign rotating engineer only
+curl -X POST http://localhost:3004/api/schedules/schedule-id/unassign \
+  -H "Content-Type: application/json" \
+  -d '{"role": "rotating"}'
+```
+
+## Next Steps
+
+After syncing data:
+
+1. **Verify in Database**:
+   ```bash
+   npm run db:studio
+   ```
+
+2. **Check Sync Results**:
+   - Engineers should appear in Engineer table
+   - Devices should appear in Equipment table
+   - Visits should appear in MaintenanceVisit table
+
+3. **Create Schedules**:
+   - Use bulk-create to generate schedules for equipment
+   - Or create individual schedules via POST /api/schedules
+
+4. **Assign Engineers**:
+   - Assign fixed engineers (must have CP & RW certs)
+   - Assign rotating engineers
+   - Check availability before assignment
+
+5. **Proceed to Phase 4**: Calendar & Schedule UI
 
