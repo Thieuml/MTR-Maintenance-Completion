@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
             equipmentNumber: true,
             name: true,
             type: true,
+            canUse2300Slot: true,
           },
         },
         zone: {
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
             equipmentNumber: true,
             name: true,
             type: true,
+            canUse2300Slot: true,
           },
         },
         zone: {
