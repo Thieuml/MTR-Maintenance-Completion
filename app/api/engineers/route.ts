@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { engineersQuerySchema } from '@/lib/validations/assignment'
-import { getEngineerWorkload } from '@/lib/utils/engineer-availability'
 
 /**
  * GET /api/engineers
@@ -177,34 +176,3 @@ export async function GET(request: NextRequest) {
     )
   }
 }
-
-/**
- * GET /api/engineers/[id]/workload
- * Get engineer workload for a date range
- */
-export async function getEngineerWorkloadEndpoint(
-  engineerId: string,
-  from: string,
-  to: string
-) {
-  try {
-    const fromDate = new Date(from)
-    const toDate = new Date(to)
-
-    const workload = await getEngineerWorkload(engineerId, fromDate, toDate)
-
-    return NextResponse.json({
-      engineerId,
-      from: fromDate.toISOString(),
-      to: toDate.toISOString(),
-      ...workload,
-    })
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    )
-  }
-}
-
