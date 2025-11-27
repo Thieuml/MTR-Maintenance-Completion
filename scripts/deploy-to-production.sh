@@ -47,19 +47,20 @@ echo ""
 # Step 3: Check if logged in to Vercel
 echo -e "${YELLOW}Step 3: Checking Vercel authentication...${NC}"
 if [ "$USE_NPX" = true ]; then
-    if ! npx vercel whoami &> /dev/null; then
-        echo "Please login to Vercel:"
-        npx vercel login
-    fi
     VERCEL_CMD="npx vercel"
 else
-    if ! vercel whoami &> /dev/null; then
-        echo "Please login to Vercel:"
-        vercel login
-    fi
     VERCEL_CMD="vercel"
 fi
-echo -e "${GREEN}✓ Vercel authentication verified${NC}"
+
+# Try to check authentication (may prompt for login if not authenticated)
+echo "Checking Vercel authentication status..."
+if $VERCEL_CMD whoami 2>&1 | grep -q "@"; then
+    echo -e "${GREEN}✓ Already authenticated to Vercel${NC}"
+else
+    echo "Not authenticated. You'll need to login when deploying."
+    echo "You can login now with: $VERCEL_CMD login"
+    echo "Or proceed to deployment and login will be prompted."
+fi
 echo ""
 
 # Step 4: Prompt for production database URL
