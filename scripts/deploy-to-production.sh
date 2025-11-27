@@ -33,20 +33,31 @@ fi
 echo -e "${GREEN}✓ Local database exported successfully${NC}"
 echo ""
 
-# Step 2: Check if Vercel CLI is installed
+# Step 2: Check if Vercel CLI is available
 echo -e "${YELLOW}Step 2: Checking Vercel CLI...${NC}"
 if ! command -v vercel &> /dev/null; then
-    echo "Vercel CLI not found. Installing..."
-    npm install -g vercel
+    echo "Vercel CLI not found globally. Will use npx vercel instead."
+    USE_NPX=true
+else
+    USE_NPX=false
 fi
 echo -e "${GREEN}✓ Vercel CLI ready${NC}"
 echo ""
 
 # Step 3: Check if logged in to Vercel
 echo -e "${YELLOW}Step 3: Checking Vercel authentication...${NC}"
-if ! vercel whoami &> /dev/null; then
-    echo "Please login to Vercel:"
-    vercel login
+if [ "$USE_NPX" = true ]; then
+    if ! npx vercel whoami &> /dev/null; then
+        echo "Please login to Vercel:"
+        npx vercel login
+    fi
+    VERCEL_CMD="npx vercel"
+else
+    if ! vercel whoami &> /dev/null; then
+        echo "Please login to Vercel:"
+        vercel login
+    fi
+    VERCEL_CMD="vercel"
 fi
 echo -e "${GREEN}✓ Vercel authentication verified${NC}"
 echo ""
@@ -107,7 +118,7 @@ if [ "$DEPLOY_CONFIRM" != "yes" ]; then
     exit 0
 fi
 
-vercel --prod
+$VERCEL_CMD --prod
 
 echo ""
 echo -e "${GREEN}✓ Deployment complete!${NC}"
@@ -117,6 +128,10 @@ echo "1. Verify your deployment at the Vercel URL"
 echo "2. Check that all data is present"
 echo "3. Test key functionality (schedules, work orders, etc.)"
 echo ""
-echo "To view logs: vercel logs"
+if [ "$USE_NPX" = true ]; then
+    echo "To view logs: npx vercel logs"
+else
+    echo "To view logs: vercel logs"
+fi
 echo "To rollback: Go to Vercel dashboard → Deployments → Promote previous deployment"
 
