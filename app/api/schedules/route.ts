@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { scheduleQuerySchema, createScheduleSchema } from '@/lib/validations/schedule'
-import { calculateDueDate } from '@/lib/utils/schedule'
-import { createHKTDate, getTimeFromSlot } from '@/lib/utils/timezone'
+import { calculateDueDate, getTimeFromSlot } from '@/lib/utils/schedule'
+import { createHKTDate } from '@/lib/utils/timezone'
 import { generateDummyORNumber } from '@/lib/utils/or-numbers'
 
 /**
