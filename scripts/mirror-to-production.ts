@@ -14,27 +14,52 @@ import { writeFileSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { config } from 'dotenv'
 
-// Load local environment variables
+// Get production DATABASE_URL from environment FIRST (before loading .env.local)
+// Use PROD_DATABASE_URL if set, otherwise fall back to DATABASE_URL
+const productionDatabaseUrl = process.env.PROD_DATABASE_URL || process.env.DATABASE_URL
+
+// Now load local environment variables (this will overwrite DATABASE_URL if it was set)
 config({ path: resolve(process.cwd(), '.env.local') })
 
-// Get production DATABASE_URL from environment (should be set when running script)
-const productionDatabaseUrl = process.env.DATABASE_URL
+// Get local DATABASE_URL from .env.local
+const localDatabaseUrl = process.env.DATABASE_URL
+
+if (!localDatabaseUrl) {
+  console.error('❌ Error: DATABASE_URL not found in .env.local!')
+  console.error('   Please ensure .env.local has DATABASE_URL set to your local database.')
+  process.exit(1)
+}
 
 if (!productionDatabaseUrl) {
-  console.error('❌ Error: DATABASE_URL environment variable not set!')
+  console.error('❌ Error: Production DATABASE_URL environment variable not set!')
   console.error('   Please set it to your production database URL:')
-  console.error('   DATABASE_URL="postgresql://..." npx tsx scripts/mirror-to-production.ts')
+  console.error('   PROD_DATABASE_URL="postgresql://..." npx tsx scripts/mirror-to-production.ts')
+  console.error('')
+  console.error('   Or use:')
+  console.error('   DATABASE_URL="<production-url>" npx tsx scripts/mirror-to-production.ts')
   process.exit(1)
 }
 
 // Check if this is production URL (should not be localhost)
 if (productionDatabaseUrl.includes('localhost') || productionDatabaseUrl.includes('127.0.0.1')) {
-  console.error('❌ Error: DATABASE_URL appears to be a local database!')
+  console.error('❌ Error: Production DATABASE_URL appears to be a local database!')
   console.error('   Please use your production database URL.')
   process.exit(1)
 }
 
-const localPrisma = new PrismaClient()
+console.log('📋 Configuration:')
+console.log(`   Local DB: ${localDatabaseUrl.substring(0, 50)}...`)
+console.log(`   Production DB: ${productionDatabaseUrl.substring(0, 50)}...`)
+console.log('')
+
+const localPrisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: localDatabaseUrl,
+    },
+  },
+})
+
 const productionPrisma = new PrismaClient({
   datasources: {
     db: {
@@ -45,7 +70,7 @@ const productionPrisma = new PrismaClient({
 
 async function exportFromLocal() {
   console.log('📤 Step 1: Exporting data from LOCAL database...')
-  console.log(`   Using: ${process.env.DATABASE_URL?.substring(0, 30)}...`)
+  console.log(`   Using: ${localDatabaseUrl.substring(0, 50)}...`)
 
   const tables = [
     'zone',
