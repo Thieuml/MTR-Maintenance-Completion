@@ -56,25 +56,21 @@ export async function POST(
       // If no engineers assigned, set status back to PLANNED
       if (!schedule.fixedEngineerId && !schedule.rotatingEngineerId) {
         // Already unassigned
-      } else if (schedule.status === 'ASSIGNED') {
-        updateData.status = 'PLANNED'
+      } else if (schedule.status === 'PLANNED' || schedule.status === 'IN_PROGRESS') {
+        // Keep status as is when unassigning
       }
     } else if (role === 'fixed') {
       // Unassign fixed engineer only
       updateData.fixedEngineerId = null
       
-      // If no engineers left, set status to PLANNED
-      if (!schedule.rotatingEngineerId && schedule.status === 'ASSIGNED') {
-        updateData.status = 'PLANNED'
-      }
+      // If no engineers left, status remains as is
+      // (No need to change status when unassigning)
     } else if (role === 'rotating') {
       // Unassign rotating engineer only
       updateData.rotatingEngineerId = null
       
-      // If no engineers left, set status to PLANNED
-      if (!schedule.fixedEngineerId && schedule.status === 'ASSIGNED') {
-        updateData.status = 'PLANNED'
-      }
+      // If no engineers left, status remains as is
+      // (No need to change status when unassigning)
     }
 
     // Update schedule
