@@ -424,7 +424,7 @@ export default function DashboardPage() {
                       <br /><br />
                       <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Start Date) within the selected period. Only work orders that have both a WM Planned Start Date and an MTR Planned Start Date are included in the average.
                       <br /><br />
-                      <strong>Interpretation:</strong> Positive values mean WM scheduled later than MTR's plan. Zero means perfect alignment. This measures WM's ability to schedule maintenance on the dates expected by MTR.
+                      <strong>Interpretation:</strong> Positive values mean WM scheduled later than MTR&apos;s plan. Zero means perfect alignment. This measures WM&apos;s ability to schedule maintenance on the dates expected by MTR.
                     </div>
                   )}
                   <div className="space-y-4">
@@ -529,7 +529,7 @@ export default function DashboardPage() {
                       <br /><br />
                       <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>executed</strong> (completed) within the selected period. Only work orders that have been completed are included in the average. Work orders scheduled in the period but not yet completed are excluded.
                       <br /><br />
-                      <strong>Interpretation:</strong> Positive values mean maintenance was completed later than planned. Zero means completed exactly on the planned date. This measures WM's ability to execute maintenance on the scheduled day, regardless of whether it matched MTR's original plan.
+                      <strong>Interpretation:</strong> Positive values mean maintenance was completed later than planned. Zero means completed exactly on the planned date. This measures WM&apos;s ability to execute maintenance on the scheduled day, regardless of whether it matched MTR&apos;s original plan.
                     </div>
                   )}
                   <div className="space-y-4">

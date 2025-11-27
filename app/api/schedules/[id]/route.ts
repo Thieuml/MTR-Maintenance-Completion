@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { updateScheduleSchema } from '@/lib/validations/schedule'
-import { calculateDueDate, validate14DayCycle } from '@/lib/utils/schedule'
+import { calculateDueDate } from '@/lib/utils/schedule'
 
 /**
  * GET /api/schedules/[id]
@@ -90,22 +90,6 @@ export async function PUT(
       const r1PlannedDate = typeof data.r1PlannedDate === 'string'
         ? new Date(data.r1PlannedDate)
         : data.r1PlannedDate
-
-      // Validate 14-day cycle constraint
-      const cycleValidation = await validate14DayCycle(
-        existing.equipmentId,
-        r1PlannedDate,
-        params.id
-      )
-      if (!cycleValidation.valid) {
-        return NextResponse.json(
-          {
-            error: 'Schedule violates 14-day cycle constraint',
-            details: cycleValidation.error,
-          },
-          { status: 400 }
-        )
-      }
 
       updateData.r1PlannedDate = r1PlannedDate
     }

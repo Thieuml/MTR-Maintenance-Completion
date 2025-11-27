@@ -130,7 +130,7 @@ export default function ValidationPage() {
               Maintenance Completion
             </h1>
             <p className="text-sm text-gray-600">
-              Validate all past maintenance services that haven't been actioned
+              Validate all past maintenance services that haven&apos;t been actioned
             </p>
           </div>
 
