@@ -182,9 +182,45 @@ export async function POST(request: NextRequest) {
 
         if (existingVisit) {
           // Update existing visit
+          // For Prisma update, handle nullable fields properly
+          const updateData: any = {
+            equipmentId: visitDataToSave.equipmentId,
+            actualStartDate: visitDataToSave.actualStartDate,
+            actualEndDate: visitDataToSave.actualEndDate,
+            completed: visitDataToSave.completed,
+            completionDate: visitDataToSave.completionDate,
+            pmFormSubmitted: visitDataToSave.pmFormSubmitted,
+            classification: visitDataToSave.classification,
+          }
+          
+          // Handle nullable fields
+          if (visitDataToSave.scheduleId !== null) {
+            updateData.scheduleId = visitDataToSave.scheduleId
+          } else {
+            updateData.scheduleId = { set: null }
+          }
+          
+          if (visitDataToSave.engineerId !== null) {
+            updateData.engineerId = visitDataToSave.engineerId
+          } else {
+            updateData.engineerId = { set: null }
+          }
+          
+          if (visitDataToSave.pmFormSubmittedAt !== null) {
+            updateData.pmFormSubmittedAt = visitDataToSave.pmFormSubmittedAt
+          } else {
+            updateData.pmFormSubmittedAt = { set: null }
+          }
+          
+          if (visitDataToSave.notes !== null) {
+            updateData.notes = visitDataToSave.notes
+          } else {
+            updateData.notes = { set: null }
+          }
+
           await prisma.maintenanceVisit.update({
             where: { id: existingVisit.id },
-            data: visitDataToSave,
+            data: updateData,
           })
           results.updated++
         } else {
