@@ -5,7 +5,7 @@
  * and creates EquipmentZoneMapping records for each device.
  */
 
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, ScheduleBatch } from '@prisma/client'
 import { config } from 'dotenv'
 import { resolve } from 'path'
 
@@ -48,7 +48,7 @@ async function initDeviceMappings() {
       equipmentNumber: string
       zoneId: string
       zoneCode: string
-      batch: string
+      batch: ScheduleBatch
       count: number
     }>()
 

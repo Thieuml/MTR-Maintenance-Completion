@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
     const results = {
       created: 0,
       updated: 0,
+      skipped: 0,
       errors: [] as string[],
     }
 
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Find engineer
+        // Find engineer (required field)
         let engineer = null
         if (visitData.engineerName) {
           engineer = engineersByName.get(visitData.engineerName.toLowerCase())
@@ -118,7 +119,8 @@ export async function POST(request: NextRequest) {
 
         if (!engineer) {
           results.errors.push(`Engineer not found: ${visitData.engineerName || 'Unknown'}`)
-          // Continue anyway - we can create visit without engineer link
+          results.skipped++
+          continue // Skip visit if engineer is required but not found
         }
 
         // Find related schedule (if exists)
@@ -166,12 +168,19 @@ export async function POST(request: NextRequest) {
           },
         })
 
+        // Skip visit creation if required fields are missing
+        // According to schema, scheduleId and engineerId are required
+        if (!schedule?.id || !engineer?.id) {
+          results.skipped++
+          continue
+        }
+
         const visitDataToSave = {
-          scheduleId: schedule?.id || null,
+          scheduleId: schedule.id,
           equipmentId: equipmentRecord.id,
           actualStartDate: visitData.completedDate,
           actualEndDate: visitData.completedDate, // Use same date if no end date
-          engineerId: engineer?.id || null,
+          engineerId: engineer.id,
           completed: true,
           completionDate: visitData.completedDate,
           pmFormSubmitted: !!visitData.pdfReport,
@@ -182,45 +191,9 @@ export async function POST(request: NextRequest) {
 
         if (existingVisit) {
           // Update existing visit
-          // For Prisma update, handle nullable fields properly
-          const updateData: any = {
-            equipmentId: visitDataToSave.equipmentId,
-            actualStartDate: visitDataToSave.actualStartDate,
-            actualEndDate: visitDataToSave.actualEndDate,
-            completed: visitDataToSave.completed,
-            completionDate: visitDataToSave.completionDate,
-            pmFormSubmitted: visitDataToSave.pmFormSubmitted,
-            classification: visitDataToSave.classification,
-          }
-          
-          // Handle nullable fields
-          if (visitDataToSave.scheduleId !== null) {
-            updateData.scheduleId = visitDataToSave.scheduleId
-          } else {
-            updateData.scheduleId = { set: null }
-          }
-          
-          if (visitDataToSave.engineerId !== null) {
-            updateData.engineerId = visitDataToSave.engineerId
-          } else {
-            updateData.engineerId = { set: null }
-          }
-          
-          if (visitDataToSave.pmFormSubmittedAt !== null) {
-            updateData.pmFormSubmittedAt = visitDataToSave.pmFormSubmittedAt
-          } else {
-            updateData.pmFormSubmittedAt = { set: null }
-          }
-          
-          if (visitDataToSave.notes !== null) {
-            updateData.notes = visitDataToSave.notes
-          } else {
-            updateData.notes = { set: null }
-          }
-
           await prisma.maintenanceVisit.update({
             where: { id: existingVisit.id },
-            data: updateData,
+            data: visitDataToSave,
           })
           results.updated++
         } else {
