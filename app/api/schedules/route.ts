@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { scheduleQuerySchema, createScheduleSchema } from '@/lib/validations/schedule'
-import { calculateDueDate, validate14DayCycle } from '@/lib/utils/schedule'
+import { calculateDueDate } from '@/lib/utils/schedule'
 import { createHKTDate, getTimeFromSlot } from '@/lib/utils/timezone'
 import { generateDummyORNumber } from '@/lib/utils/or-numbers'
 
@@ -68,7 +68,15 @@ export async function GET(request: NextRequest) {
     // Fetch schedules with related data
     const schedules = await prisma.schedule.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        r0PlannedDate: true,
+        r1PlannedDate: true,
+        dueDate: true,
+        batch: true,
+        timeSlot: true,
+        status: true,
+        workOrderNumber: true,
         equipment: {
           select: {
             id: true,
@@ -76,6 +84,7 @@ export async function GET(request: NextRequest) {
             name: true,
             type: true,
             location: true,
+            canUse2300Slot: true,
           },
         },
         zone: {
@@ -160,19 +169,6 @@ export async function POST(request: NextRequest) {
 
     // Calculate due date (R0 + 14 days)
     const dueDate = calculateDueDate(r0PlannedDate)
-
-    // Validate 14-day cycle constraint (US12)
-    const cycleValidation = await validate14DayCycle(data.equipmentId, r1PlannedDate)
-    if (!cycleValidation.valid) {
-      return NextResponse.json(
-        { 
-          error: 'Schedule violates 14-day cycle constraint',
-          details: cycleValidation.error,
-          previousSchedule: cycleValidation.previousSchedule,
-        },
-        { status: 400 }
-      )
-    }
 
     // Validate fixed engineer has CP & RW certificates (if provided)
     if (data.fixedEngineerId) {

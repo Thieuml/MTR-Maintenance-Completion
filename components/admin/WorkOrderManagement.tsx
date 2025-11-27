@@ -1,44 +1,48 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+
+interface UploadResult {
+  success: boolean
+  totalLines: number
+  validLines: number
+  errors: Array<{
+    line: number
+    equipmentNumber: string
+    woNumber: string
+    error: string
+  }>
+  uploaded: Array<{
+    equipmentNumber: string
+    woNumber: string
+    uploadTimestamp: string
+  }>
+  message: string
+}
+
+interface LastUpload {
+  timestamp: string
+  workOrderCount: number
+  fileName?: string
+}
 
 export function WorkOrderManagement() {
   const [workOrders, setWorkOrders] = useState<any[]>([])
-  const [equipment, setEquipment] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    workOrderNumber: '',
-    equipmentId: '',
-    date: '',
-  })
+  const [allWorkOrders, setAllWorkOrders] = useState<any[]>([])
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
+  const [lastUpload, setLastUpload] = useState<LastUpload | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [dateRange, setDateRange] = useState<'7days' | '30days' | 'all'>('7days')
 
-  // Fetch equipment with mappings
-  useEffect(() => {
-    async function loadEquipment() {
-      try {
-        const res = await fetch('/api/admin/equipment-mapping')
-        const data = await res.json()
-        setEquipment(
-          data.mappings.map((m: any) => ({
-            ...m.equipment,
-            zone: m.zone,
-            batch: m.batch,
-          }))
-        )
-      } catch (error) {
-        console.error('Failed to load equipment:', error)
-      }
-    }
-    loadEquipment()
-  }, [])
-
-  // Fetch work orders
+  // Fetch all work orders
   useEffect(() => {
     async function loadWorkOrders() {
       try {
         const res = await fetch('/api/admin/work-orders')
         const data = await res.json()
-        setWorkOrders(data.workOrders || [])
+        setAllWorkOrders(data.workOrders || [])
       } catch (error) {
         console.error('Failed to load work orders:', error)
       }
@@ -46,38 +50,136 @@ export function WorkOrderManagement() {
     loadWorkOrders()
   }, [])
 
-  const handleAssignWO = async () => {
-    if (!formData.workOrderNumber || !formData.equipmentId || !formData.date) {
-      alert('Please fill in all fields')
+  // Filter work orders based on date range and search
+  const filteredWorkOrders = useMemo(() => {
+    let filtered = [...allWorkOrders]
+
+    // Filter by date range (based on createdAt/upload timestamp)
+    if (dateRange === '7days') {
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      filtered = filtered.filter((wo) => {
+        const uploadDate = new Date(wo.createdAt)
+        return uploadDate >= sevenDaysAgo
+      })
+    } else if (dateRange === '30days') {
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      filtered = filtered.filter((wo) => {
+        const uploadDate = new Date(wo.createdAt)
+        return uploadDate >= thirtyDaysAgo
+      })
+    }
+    // 'all' shows everything
+
+    // Filter by search term (WO number)
+    if (searchTerm.trim()) {
+      const search = searchTerm.trim().toLowerCase()
+      filtered = filtered.filter((wo) =>
+        wo.workOrderNumber?.toLowerCase().includes(search) ||
+        wo.equipment?.equipmentNumber?.toLowerCase().includes(search)
+      )
+    }
+
+    return filtered
+  }, [allWorkOrders, dateRange, searchTerm])
+
+  // Update displayed work orders
+  useEffect(() => {
+    setWorkOrders(filteredWorkOrders)
+  }, [filteredWorkOrders])
+
+  // Load last upload info from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('lastWorkOrderUpload')
+    if (stored) {
+      try {
+        setLastUpload(JSON.parse(stored))
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  }, [])
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.name.endsWith('.csv')) {
+      alert('Please upload a CSV file')
       return
     }
 
-    setLoading(true)
+    setIsUploading(true)
+    setUploadResult(null)
+
     try {
-      const date = new Date(formData.date)
-      const res = await fetch('/api/admin/work-orders', {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/admin/work-orders/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workOrderNumber: formData.workOrderNumber,
-          equipmentId: formData.equipmentId,
-          date: date.toISOString(),
-        }),
+        body: formData,
       })
 
+      const result: UploadResult = await res.json()
+
       if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Failed to assign work order')
+        throw new Error(result.message || 'Upload failed')
       }
 
-      const data = await res.json()
-      setWorkOrders([data.schedule, ...workOrders])
-      setFormData({ workOrderNumber: '', equipmentId: '', date: '' })
-      alert('Work order assigned successfully!')
+      setUploadResult(result)
+
+      // Store last upload info
+      if (result.success && result.validLines > 0) {
+        const uploadInfo: LastUpload = {
+          timestamp: new Date().toISOString(),
+          workOrderCount: result.validLines,
+          fileName: file.name,
+        }
+        setLastUpload(uploadInfo)
+        localStorage.setItem('lastWorkOrderUpload', JSON.stringify(uploadInfo))
+
+        // Refresh work orders
+        const refreshRes = await fetch('/api/admin/work-orders')
+        const refreshData = await refreshRes.json()
+        setAllWorkOrders(refreshData.workOrders || [])
+      }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to assign work order')
+      setUploadResult({
+        success: false,
+        totalLines: 0,
+        validLines: 0,
+        errors: [],
+        uploaded: [],
+        message: error instanceof Error ? error.message : 'Upload failed',
+      })
     } finally {
-      setLoading(false)
+      setIsUploading(false)
+    }
+  }
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(false)
+
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      handleFileUpload(file)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFileUpload(file)
     }
   }
 
@@ -85,72 +187,204 @@ export function WorkOrderManagement() {
     <div>
       <h2 className="text-xl font-semibold mb-4 text-gray-900">Work Order Management</h2>
       <p className="text-sm text-gray-700 mb-6">
-        Map work orders (OR numbers) to equipment and dates.
+        Upload work orders from CSV file.
       </p>
 
-      {/* Assign Work Order Form */}
-      <div className="bg-gray-50 p-4 rounded-lg mb-6">
-            <h3 className="font-medium mb-4 text-gray-900">Assign Work Order</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Work Order Number
-            </label>
-            <input
-              type="text"
-              value={formData.workOrderNumber}
-              onChange={(e) =>
-                setFormData({ ...formData, workOrderNumber: e.target.value })
-              }
-              placeholder="e.g., 5000355448"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Equipment
-            </label>
-            <select
-              value={formData.equipmentId}
-              onChange={(e) =>
-                setFormData({ ...formData, equipmentId: e.target.value })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
-            >
-              <option value="">Select equipment...</option>
-              {equipment.map((eq: any) => (
-                <option key={eq.id} value={eq.id}>
-                  {eq.equipmentNumber} ({eq.zone.code} - {eq.batch})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date
-            </label>
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={handleAssignWO}
-              disabled={loading || !formData.workOrderNumber || !formData.equipmentId || !formData.date}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Assigning...' : 'Assign WO'}
-            </button>
-          </div>
+      {/* CSV Upload Section */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
+        <h3 className="text-lg font-medium mb-4 text-gray-900">Upload Work Orders (CSV)</h3>
+        
+        {/* Drag and Drop Zone */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            isDragging
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileSelect}
+            className="hidden"
+            id="csv-upload"
+            disabled={isUploading}
+          />
+          <label
+            htmlFor="csv-upload"
+            className={`cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <div className="space-y-2">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                stroke="currentColor"
+                fill="none"
+                viewBox="0 0 48 48"
+              >
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-4h-12m-4-4h12.172M16 20l.172-.172a4 4 0 015.656 0L28 28"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <div className="text-sm text-gray-600">
+                {isUploading ? (
+                  <span>Uploading...</span>
+                ) : (
+                  <>
+                    <span className="font-medium text-blue-600">Click to upload</span> or drag and drop
+                  </>
+                )}
+              </div>
+              <div className="text-xs text-gray-500">CSV file only</div>
+            </div>
+          </label>
         </div>
+
+        {/* Upload Result */}
+        {uploadResult && (
+          <div className={`mt-4 p-4 rounded-lg ${
+            uploadResult.success && uploadResult.errors.length === 0
+              ? 'bg-green-50 border border-green-200'
+              : uploadResult.success && uploadResult.errors.length > 0
+              ? 'bg-yellow-50 border border-yellow-200'
+              : 'bg-red-50 border border-red-200'
+          }`}>
+            <div className="font-medium mb-2">
+              {uploadResult.success && uploadResult.errors.length === 0 ? (
+                <span className="text-green-800">✓ Upload Successful</span>
+              ) : uploadResult.success && uploadResult.errors.length > 0 ? (
+                <span className="text-yellow-800">⚠ Upload Completed with Errors</span>
+              ) : (
+                <span className="text-red-800">✗ Upload Failed</span>
+              )}
+            </div>
+            <div className="text-sm text-gray-700 mb-3">
+              {uploadResult.message}
+            </div>
+            <div className="text-sm text-gray-600 space-y-1">
+              <div>Total lines processed: {uploadResult.totalLines}</div>
+              <div>Successfully uploaded: {uploadResult.validLines}</div>
+              {uploadResult.errors.length > 0 && (
+                <div>Errors: {uploadResult.errors.length}</div>
+              )}
+            </div>
+
+            {/* Error Details */}
+            {uploadResult.errors.length > 0 && (
+              <div className="mt-4">
+                <div className="font-medium text-sm text-gray-900 mb-2">Error Details:</div>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-2 py-1 text-left">Line</th>
+                        <th className="px-2 py-1 text-left">Equipment</th>
+                        <th className="px-2 py-1 text-left">WO Number</th>
+                        <th className="px-2 py-1 text-left">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {uploadResult.errors.map((error, idx) => (
+                        <tr key={idx}>
+                          <td className="px-2 py-1">{error.line}</td>
+                          <td className="px-2 py-1">{error.equipmentNumber}</td>
+                          <td className="px-2 py-1">{error.woNumber}</td>
+                          <td className="px-2 py-1 text-red-600">{error.error}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Uploaded Work Orders */}
+            {uploadResult.uploaded.length > 0 && (
+              <div className="mt-4">
+                <div className="font-medium text-sm text-gray-900 mb-2">Uploaded Work Orders:</div>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-2 py-1 text-left">Equipment</th>
+                        <th className="px-2 py-1 text-left">WO Number</th>
+                        <th className="px-2 py-1 text-left">Upload Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {uploadResult.uploaded.map((wo, idx) => (
+                        <tr key={idx}>
+                          <td className="px-2 py-1">{wo.equipmentNumber}</td>
+                          <td className="px-2 py-1">{wo.woNumber}</td>
+                          <td className="px-2 py-1">
+                            {new Date(wo.uploadTimestamp).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Existing Work Orders */}
-      <div>
-        <h3 className="font-medium mb-4 text-gray-900">Assigned Work Orders ({workOrders.length})</h3>
+      {/* Last Upload Details Box */}
+      {lastUpload && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">Last Upload</h4>
+          <div className="text-sm text-blue-800 space-y-1">
+            <div>
+              <span className="font-medium">Date & Time:</span>{' '}
+              {new Date(lastUpload.timestamp).toLocaleString()}
+            </div>
+            <div>
+              <span className="font-medium">Work Orders Uploaded:</span> {lastUpload.workOrderCount}
+            </div>
+            {lastUpload.fileName && (
+              <div>
+                <span className="font-medium">File:</span> {lastUpload.fileName}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Uploaded Work Orders Table */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <h3 className="font-medium text-gray-900">
+              Uploaded Work Orders ({workOrders.length})
+            </h3>
+            <div className="flex items-center gap-3">
+              {/* Search by WO Number */}
+              <input
+                type="text"
+                placeholder="Search by WO # or Equipment..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              />
+              {/* Date Range Filter */}
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value as '7days' | '30days' | 'all')}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              >
+                <option value="7days">Last 7 days</option>
+                <option value="30days">Last 30 days</option>
+                <option value="all">All time</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -159,22 +393,44 @@ export function WorkOrderManagement() {
                   Equipment
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
-                  Date
+                  WM Planned Date
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
-                  OR Number
+                  MTR Planned Start
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                  Due Date
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                  WO Number
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                  Upload Timestamp
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {workOrders.map((wo) => (
                 <tr key={wo.id}>
-                  <td className="px-4 py-3 text-sm text-gray-900">{wo.equipment.equipmentNumber}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {wo.equipment.equipmentNumber}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {new Date(wo.r1PlannedDate).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-3 text-sm font-mono text-gray-900">
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {wo.mtrPlannedStartDate
+                      ? new Date(wo.mtrPlannedStartDate).toLocaleDateString()
+                      : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
                     {wo.workOrderNumber}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {new Date(wo.createdAt).toLocaleString()}
                   </td>
                 </tr>
               ))}
@@ -182,7 +438,9 @@ export function WorkOrderManagement() {
           </table>
           {workOrders.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              No work orders assigned yet.
+              {searchTerm || dateRange !== 'all'
+                ? 'No work orders found matching your criteria.'
+                : 'No work orders uploaded yet.'}
             </div>
           )}
         </div>

@@ -9,11 +9,14 @@ This tool replaces the Excel-based maintenance scheduling system for MTR equipme
 ## Key Features
 
 - **14-Day Cycle Tracking**: Visual calendar showing all committed maintenance dates
-- **Compliance Monitoring**: Track committed dates vs actual completion with ±3-5 day tolerance
-- **Chinese Notifications**: Automated reminders for engineers in Chinese
-- **Rescheduling Management**: Track and manage rescheduling requests with MTR approval workflow
+- **Drag-and-Drop Rescheduling**: Intuitive interface to move maintenance slots between days/times
+- **Work Order Management**: CSV upload with automatic slot distribution and validation
+- **Completion Tracking**: Mark maintenance as completed or flag for rescheduling
+- **Work Order Tracking**: Comprehensive view with tabs for validation, rescheduling, and completed work orders
+- **Admin Panel**: Manage devices, zone mappings, 23:00 slot eligibility, and engineer assignments
 - **Looker Integration**: Automatic sync of engineers, devices, and maintenance visits
-- **Compliance Reporting**: Generate audit reports for MTR
+- **Compliance Monitoring**: Track committed dates vs actual completion with ±3-5 day tolerance
+- **Chinese Notifications**: Automated reminders for engineers (Novu workflows configured)
 
 ## Tech Stack
 
@@ -75,7 +78,7 @@ npm run setup:novu
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the app.
+Open [http://localhost:3004](http://localhost:3004) to see the app (port configured to 3004).
 
 ## Looker Integration
 
@@ -114,23 +117,72 @@ Workflows are created automatically via `npm run setup:novu`. Customize template
 
 ```
 MTR-Maintenance-Tracking/
-├── app/                    # Next.js App Router pages
-│   ├── api/               # API routes
-│   └── page.tsx           # Home page
-├── lib/                    # Shared utilities
-│   ├── looker.ts         # Looker integration
-│   ├── novu.ts           # Novu integration
-│   └── prisma.ts         # Prisma client
+├── app/                           # Next.js App Router pages
+│   ├── api/                      # API routes
+│   │   ├── admin/                # Admin endpoints
+│   │   ├── engineers/            # Engineer endpoints
+│   │   ├── schedules/            # Schedule endpoints
+│   │   ├── sync/                 # Looker sync endpoints
+│   │   └── zones/                # Zone endpoints
+│   ├── admin/                    # Admin panel page
+│   ├── schedule/                 # Schedule calendar page
+│   ├── work-order-tracking/      # Work order tracking page
+│   ├── reschedule/               # Rescheduling page
+│   └── validation/               # Completion validation page
+├── components/                    # React components
+│   ├── admin/                    # Admin components
+│   ├── ScheduleCalendar.tsx      # Main calendar component
+│   ├── ScheduleCard.tsx          # Schedule card component
+│   └── Navigation.tsx            # Sidebar navigation
+├── lib/                           # Shared utilities
+│   ├── looker.ts                 # Looker integration
+│   ├── novu.ts                   # Novu integration
+│   ├── prisma.ts                 # Prisma client
+│   └── hooks.ts                  # React hooks (useSchedule, etc.)
 ├── prisma/
-│   └── schema.prisma     # Database schema
-└── scripts/               # Utility scripts
+│   └── schema.prisma            # Database schema
+└── scripts/                      # Utility scripts
+    ├── init-device-mappings.ts   # Initialize device mappings
+    └── normalize-equipment-numbers.ts  # Normalize equipment names
 ```
 
 ## API Endpoints
 
+### Health & Sync
 - `GET /api/health` - Health check endpoint
+- `POST /api/sync/engineers` - Sync engineers from Looker
+- `POST /api/sync/devices` - Sync devices from Looker
+- `POST /api/sync/visits` - Sync maintenance visits from Looker
 
-More API endpoints will be added as features are developed.
+### Schedules
+- `GET /api/schedules` - List schedules with optional filters (zone, date range, status)
+- `POST /api/schedules` - Create a new schedule
+- `GET /api/schedules/[id]` - Get a specific schedule
+- `POST /api/schedules/[id]/move` - Move or swap schedules (drag-and-drop)
+- `POST /api/schedules/[id]/assign` - Assign engineers to a schedule
+- `POST /api/schedules/[id]/unassign` - Unassign engineers from a schedule
+- `POST /api/schedules/[id]/validate` - Validate maintenance completion (completed/to_reschedule)
+- `POST /api/schedules/bulk-create` - Bulk create schedules
+
+### Engineers
+- `GET /api/engineers` - List engineers
+- `GET /api/engineers/[id]/workload` - Get engineer workload statistics
+
+### Zones
+- `GET /api/zones` - List all zones
+
+### Admin
+- `GET /api/admin/equipment` - List all equipment (from Looker and database)
+- `POST /api/admin/equipment` - Create or update equipment
+- `GET /api/admin/equipment/[id]` - Get specific equipment
+- `GET /api/admin/equipment-2300` - Get all 23:00-eligible equipment
+- `GET /api/admin/equipment-mapping` - List equipment zone mappings
+- `POST /api/admin/equipment-mapping` - Create or update equipment mapping
+- `GET /api/admin/equipment-mapping/[equipmentId]` - Get equipment mapping
+- `GET /api/admin/work-orders` - List work orders with filters
+- `POST /api/admin/work-orders/upload` - Upload work orders from CSV
+- `GET /api/admin/zone-engineers` - List zone-engineer assignments
+- `POST /api/admin/zone-engineers` - Create zone-engineer assignment
 
 ## Development
 

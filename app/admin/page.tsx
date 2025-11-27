@@ -1,16 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { EquipmentMapping } from '@/components/admin/EquipmentMapping'
+import { Devices } from '@/components/admin/Devices'
 import { WorkOrderManagement } from '@/components/admin/WorkOrderManagement'
 import { ZoneEngineerAssignment } from '@/components/admin/ZoneEngineerAssignment'
-import { Equipment2300Settings } from '@/components/admin/Equipment2300Settings'
 import { Navigation } from '@/components/Navigation'
 
-type AdminTab = 'mapping' | 'workorders' | 'engineers' | '2300settings'
+type AdminTab = 'devices' | 'workorders' | 'engineers'
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('mapping')
+  const [activeTab, setActiveTab] = useState<AdminTab>('devices')
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -32,14 +31,14 @@ export default function AdminPage() {
           <div className="border-b border-gray-200">
             <nav className="flex -mb-px">
               <button
-                onClick={() => setActiveTab('mapping')}
+                onClick={() => setActiveTab('devices')}
                 className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                  activeTab === 'mapping'
+                  activeTab === 'devices'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Unit Mapping
+                Devices
               </button>
               <button
                 onClick={() => setActiveTab('workorders')}
@@ -61,25 +60,14 @@ export default function AdminPage() {
               >
                 Engineer Assignments
               </button>
-              <button
-                onClick={() => setActiveTab('2300settings')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                  activeTab === '2300settings'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                23:00 Slot Settings
-              </button>
             </nav>
           </div>
 
           {/* Tab Content */}
           <div className="p-6">
-            {activeTab === 'mapping' && <EquipmentMapping />}
+            {activeTab === 'devices' && <Devices />}
             {activeTab === 'workorders' && <WorkOrderManagement />}
             {activeTab === 'engineers' && <ZoneEngineerAssignment />}
-            {activeTab === '2300settings' && <Equipment2300Settings />}
           </div>
         </div>
         </div>

@@ -3,7 +3,6 @@
 ## Background & Context
 
 WeMaintain maintains lifts and escalators in the Hong Kong MTR network under a contract requiring maintenance every 14 days, always during the night shift (23:00–05:00).
-
 Each unit has a committed recurring date (e.g., every second Wednesday night).
 
 Today's process is fragmented and Excel-based, resulting in:
@@ -196,21 +195,60 @@ Same credentials as for Project ShiftProto should be used.
 
 ## Implementation Status
 
-### Phase 1 (Current)
+### Phase 1: Data Sync ✅
 - ✅ Project structure setup
 - ✅ Database schema design
 - ✅ Looker integration utilities
 - ✅ Novu integration utilities
 - ✅ Basic app structure
+- ✅ API endpoints for syncing engineers, devices, and visits from Looker
 
-### Phase 2 (Next Steps)
-- [ ] API routes for schedule management
-- [ ] Calendar/schedule visualization UI
-- [ ] Engineer assignment interface
-- [ ] Maintenance completion tracking
-- [ ] Rescheduling workflow
-- [ ] Compliance reporting
-- [ ] Data sync from Looker
+### Phase 2: Schedule Management API ✅
+- ✅ CRUD operations for schedules
+- ✅ 14-day cycle validation
+- ✅ Schedule assignment/unassignment endpoints
+- ✅ Bulk schedule creation
+
+### Phase 3: Engineer Assignment API ✅
+- ✅ Engineer assignment endpoints
+- ✅ Availability and certification checks
+- ✅ Workload tracking per engineer
+- ✅ Zone-engineer assignment management
+
+### Phase 4: Calendar & Schedule UI ✅
+- ✅ Visual 14-day calendar for schedules
+- ✅ Zone and date filtering
+- ✅ Status color coding
+- ✅ Drag-and-drop schedule rescheduling
+- ✅ Schedule card display with equipment details, OR numbers, and deadlines
+- ✅ 23:00 slot eligibility indicators
+
+### Phase 5: Work Order Management ✅
+- ✅ Work Order CSV upload with validation
+- ✅ Automatic slot distribution (11pm-eligible units to SLOT_2300, others distributed across SLOT_0130 and SLOT_0330)
+- ✅ Work Order tracking page with tabs (To be validated, To be rescheduled, Completed)
+- ✅ Search functionality by Work Order number
+- ✅ Upload history and details
+
+### Phase 6: Maintenance Validation & Rescheduling ✅
+- ✅ Completion validation workflow (mark as completed or to reschedule)
+- ✅ Bulk validation actions
+- ✅ Rescheduling interface with slot picker
+- ✅ Visual indicators for pending/completed/to reschedule status
+- ✅ Deadline tracking and display
+
+### Phase 7: Admin Panel ✅
+- ✅ Devices management (view all devices from Looker, edit zone/batch mapping)
+- ✅ 23:00 slot settings (manage which devices can use 23:00 slot)
+- ✅ Work Order upload and management
+- ✅ Zone-engineer assignment interface
+
+### Phase 8: Next Steps (Future)
+- [ ] Chinese-language notifications via Novu (workflows configured, not yet triggered)
+- [ ] Compliance reporting and analytics
+- [ ] Export audit history
+- [ ] Engineer performance metrics (% late visits, overdue units per engineer)
+- [ ] EAMS integration (when available)
 
 ## Sequencing
 

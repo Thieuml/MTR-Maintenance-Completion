@@ -58,10 +58,13 @@ async function main() {
   console.log('🌱 Seeding database...')
 
   // Clear existing data (order matters due to foreign keys)
+  // Delete in order: child tables first, then parent tables
   console.log('\n🗑️  Clearing existing data...')
   await prisma.maintenanceVisit.deleteMany()
   await prisma.reschedule.deleteMany()
   await prisma.schedule.deleteMany()
+  await prisma.equipmentZoneMapping.deleteMany() // Must delete before Equipment
+  await prisma.zoneEngineerAssignment.deleteMany() // Must delete before Zone and Engineer
   await prisma.equipment.deleteMany()
   await prisma.engineer.deleteMany()
   await prisma.zone.deleteMany()
@@ -135,6 +138,42 @@ async function main() {
       })
       createdEngineers[engineerData.zoneCode] = engineer.id
       console.log(`✅ Created certified engineer: ${engineerData.name} (${engineerData.zoneCode})`)
+    }
+  }
+
+  // Create fixed engineer assignments (FIXED_QUALIFIED for all zones)
+  console.log('\n👥 Creating fixed engineer assignments...')
+  for (const engineerData of certifiedEngineers) {
+    const zoneId = createdZones[engineerData.zoneCode]
+    const engineerId = createdEngineers[engineerData.zoneCode]
+    
+    if (!zoneId || !engineerId) {
+      console.warn(`⚠️  Cannot create assignment for ${engineerData.zoneCode} - ${engineerData.name}: missing zone or engineer`)
+      continue
+    }
+
+    try {
+      await prisma.zoneEngineerAssignment.upsert({
+        where: {
+          zoneId_engineerId: {
+            zoneId,
+            engineerId,
+          },
+        },
+        update: {
+          role: 'FIXED_QUALIFIED',
+          active: true,
+        },
+        create: {
+          zoneId,
+          engineerId,
+          role: 'FIXED_QUALIFIED',
+          active: true,
+        },
+      })
+      console.log(`✅ Created assignment: ${engineerData.zoneCode} - ${engineerData.name}`)
+    } catch (error: any) {
+      console.error(`❌ Error creating assignment for ${engineerData.zoneCode} - ${engineerData.name}:`, error.message)
     }
   }
 
@@ -472,9 +511,18 @@ async function main() {
   ]
 
   // Create equipment map to avoid duplicates
+  // Also track which equipment is scheduled at 23:00
   const equipmentMap = new Map<string, { id: string; zoneId: string }>()
+  const equipment2300Slot = new Set<string>() // Track equipment numbers that use 23:00 slot
 
-  // First pass: Create all equipment
+  // First pass: Identify equipment scheduled at 23:00
+  for (const schedule of scheduleData) {
+    if (schedule.timeSlot === 'SLOT_2300' && schedule.equipmentNumber) {
+      equipment2300Slot.add(schedule.equipmentNumber)
+    }
+  }
+
+  // Second pass: Create all equipment
   console.log('\n📦 Creating equipment...')
   for (const schedule of scheduleData) {
     const equipmentKey = `${schedule.zoneCode}-${schedule.equipmentNumber}`
@@ -491,9 +539,14 @@ async function main() {
         type = 'ESCALATOR'
       }
 
+      // Check if this equipment is scheduled at 23:00
+      const canUse2300Slot = equipment2300Slot.has(schedule.equipmentNumber)
+
       const equipment = await prisma.equipment.upsert({
         where: { equipmentNumber: schedule.equipmentNumber },
-        update: {},
+        update: {
+          canUse2300Slot, // Update existing equipment to mark 23:00 capability
+        },
         create: {
           equipmentNumber: schedule.equipmentNumber,
           name: schedule.equipmentNumber,
@@ -501,10 +554,12 @@ async function main() {
           location: schedule.equipmentNumber,
           zoneId,
           active: true,
+          canUse2300Slot,
         },
       })
       equipmentMap.set(equipmentKey, { id: equipment.id, zoneId })
-      console.log(`  ✅ Equipment: ${schedule.equipmentNumber}`)
+      const slotIndicator = canUse2300Slot ? ' (23:00)' : ''
+      console.log(`  ✅ Equipment: ${schedule.equipmentNumber}${slotIndicator}`)
     }
   }
 
@@ -576,6 +631,61 @@ async function main() {
   }
 
   console.log(`\n✅ Created ${scheduleCount} schedules`)
+
+  // Third pass: Create device mappings from schedule data
+  console.log('\n🔗 Creating device mappings...')
+  const mappingMap = new Map<string, {
+    equipmentId: string
+    zoneId: string
+    batch: ScheduleBatch
+  }>()
+
+  // Extract unique equipment-zone-batch combinations from schedules
+  for (const schedule of scheduleData) {
+    const equipmentKey = `${schedule.zoneCode}-${schedule.equipmentNumber}`
+    const equipment = equipmentMap.get(equipmentKey)
+    if (!equipment) continue
+
+    const zoneId = createdZones[schedule.zoneCode]
+    if (!zoneId) continue
+
+    const mappingKey = equipment.id
+    // If equipment appears in multiple batches, keep the first one encountered
+    // (in practice, each equipment should have a consistent batch)
+    if (!mappingMap.has(mappingKey)) {
+      mappingMap.set(mappingKey, {
+        equipmentId: equipment.id,
+        zoneId,
+        batch: schedule.batch as ScheduleBatch,
+      })
+    }
+  }
+
+  // Create EquipmentZoneMapping records
+  let mappingCount = 0
+  for (const mapping of Array.from(mappingMap.values())) {
+    try {
+      await prisma.equipmentZoneMapping.upsert({
+        where: { equipmentId: mapping.equipmentId },
+        update: {
+          zoneId: mapping.zoneId,
+          batch: mapping.batch,
+          active: true,
+        },
+        create: {
+          equipmentId: mapping.equipmentId,
+          zoneId: mapping.zoneId,
+          batch: mapping.batch,
+          active: true,
+        },
+      })
+      mappingCount++
+    } catch (error: any) {
+      console.error(`  ❌ Error creating mapping for equipment ${mapping.equipmentId}:`, error.message)
+    }
+  }
+
+  console.log(`✅ Created ${mappingCount} device mappings`)
   console.log('✅ Seeding completed!')
 }
 

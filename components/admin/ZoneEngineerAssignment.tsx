@@ -51,8 +51,10 @@ export function ZoneEngineerAssignment() {
         throw new Error(error.error || 'Failed to assign engineer')
       }
 
-      const data = await res.json()
-      setAssignments([...assignments, data.assignment])
+      // Refresh assignments list
+      const refreshRes = await fetch('/api/admin/zone-engineers')
+      const refreshData = await refreshRes.json()
+      setAssignments(refreshData.assignments || [])
       setFormData({ zoneId: '', engineerId: '', role: 'FIXED_QUALIFIED' })
       alert('Engineer assigned successfully!')
     } catch (error) {

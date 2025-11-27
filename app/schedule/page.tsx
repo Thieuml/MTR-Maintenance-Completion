@@ -71,7 +71,7 @@ export default function SchedulePage() {
   const from = fromDate.toISOString().split('T')[0]
   const to = toDate.toISOString().split('T')[0]
 
-  const { schedules, isLoading, isError } = useSchedule(
+  const { schedules, isLoading, isError, mutate } = useSchedule(
     undefined, // Always fetch all zones
     from,
     to
@@ -202,6 +202,10 @@ export default function SchedulePage() {
                 fromDate={fromDate}
                 toDate={toDate}
                 viewMode={viewMode}
+                onScheduleMove={() => {
+                  // Refresh schedules
+                  mutate()
+                }}
               />
             </div>
           ))}

@@ -14,53 +14,6 @@ export function calculateDueDate(r0PlannedDate: Date): Date {
   return dueDate
 }
 
-/**
- * Validate 14-day cycle constraint
- * Checks if the new schedule date is within 14 days of the previous schedule
- * 
- * @param equipmentId - Equipment ID
- * @param newR1Date - New R1 planned date
- * @param excludeScheduleId - Schedule ID to exclude from check (for updates)
- * @returns { valid: boolean, error?: string, previousSchedule?: any }
- */
-export async function validate14DayCycle(
-  equipmentId: string,
-  newR1Date: Date,
-  excludeScheduleId?: string
-): Promise<{ valid: boolean; error?: string; previousSchedule?: any }> {
-  const { prisma } = await import('@/lib/prisma')
-
-  // Find the most recent schedule for this equipment
-  const previousSchedule = await prisma.schedule.findFirst({
-    where: {
-      equipmentId,
-      id: excludeScheduleId ? { not: excludeScheduleId } : undefined,
-    },
-    orderBy: {
-      r1PlannedDate: 'desc',
-    },
-  })
-
-  if (!previousSchedule) {
-    // No previous schedule - always valid
-    return { valid: true }
-  }
-
-  // Calculate days between previous and new schedule
-  const daysDiff = Math.abs(
-    Math.floor((newR1Date.getTime() - previousSchedule.r1PlannedDate.getTime()) / (24 * 60 * 60 * 1000))
-  )
-
-  if (daysDiff > 14) {
-    return {
-      valid: false,
-      error: `Schedule violates 14-day cycle constraint. Previous schedule was ${daysDiff} days ago (max 14 days).`,
-      previousSchedule,
-    }
-  }
-
-  return { valid: true, previousSchedule }
-}
 
 /**
  * Get time slot enum from hour and minute
@@ -95,7 +48,7 @@ export function getTimeFromSlot(timeSlot: TimeSlot): { hour: number; minute: num
 
 /**
  * Determine batch (A or B) based on date
- * Alternates every 14 days
+ * Alternates every 2 weeks
  */
 export function determineBatch(date: Date, startDate?: Date): ScheduleBatch {
   if (!startDate) {
@@ -107,7 +60,7 @@ export function determineBatch(date: Date, startDate?: Date): ScheduleBatch {
     (date.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)
   )
 
-  // Alternate every 14 days
+  // Alternate every 2 weeks (14 days)
   const batchNumber = Math.floor(daysSinceStart / 14) % 2
   return batchNumber === 0 ? 'A' : 'B'
 }
