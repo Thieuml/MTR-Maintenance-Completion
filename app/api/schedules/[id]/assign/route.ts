@@ -105,10 +105,8 @@ export async function POST(
       updateData.rotatingEngineerId = engineerId
     }
 
-    // Update status to ASSIGNED if not already assigned
-    if (schedule.status === 'PLANNED') {
-      updateData.status = 'ASSIGNED'
-    }
+    // Status remains as is when assigning engineers
+    // (No need to change status)
 
     const updatedSchedule = await prisma.schedule.update({
       where: { id: params.id },
