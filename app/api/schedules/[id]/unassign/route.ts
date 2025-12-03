@@ -56,7 +56,7 @@ export async function POST(
       // If no engineers assigned, set status back to PLANNED
       if (!schedule.fixedEngineerId && !schedule.rotatingEngineerId) {
         // Already unassigned
-      } else if (schedule.status === 'PLANNED' || schedule.status === 'IN_PROGRESS') {
+      } else if (schedule.status === 'PLANNED' || schedule.status === 'PENDING') {
         // Keep status as is when unassigning
       }
     } else if (role === 'fixed') {
