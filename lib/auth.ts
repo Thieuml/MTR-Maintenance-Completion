@@ -24,7 +24,10 @@ export const authOptions: NextAuthOptions = {
           access_type: 'offline',
           response_type: 'code',
           // Restrict to your Google Workspace domain (optional but recommended)
-          hd: process.env.GOOGLE_WORKSPACE_DOMAIN || undefined,
+          // Remove @ if present - hd parameter expects just the domain
+          hd: process.env.GOOGLE_WORKSPACE_DOMAIN 
+            ? process.env.GOOGLE_WORKSPACE_DOMAIN.replace('@', '').trim() 
+            : undefined,
         },
       },
     }),
@@ -43,7 +46,9 @@ export const authOptions: NextAuthOptions = {
       // Optional: Restrict access to specific Google Workspace domain
       if (process.env.GOOGLE_WORKSPACE_DOMAIN) {
         const email = user.email || profile?.email
-        if (email && !email.endsWith(`@${process.env.GOOGLE_WORKSPACE_DOMAIN}`)) {
+        const domain = process.env.GOOGLE_WORKSPACE_DOMAIN.replace('@', '').trim()
+        if (email && !email.endsWith(`@${domain}`)) {
+          console.error(`[Auth] Access denied: ${email} does not match domain ${domain}`)
           return false
         }
       }
@@ -66,6 +71,6 @@ export const authOptions: NextAuthOptions = {
       console.log(`User signed in: ${user.email} (${isNewUser ? 'new' : 'existing'})`)
     },
   },
-  debug: process.env.NODE_ENV === 'development',
+  debug: true, // Enable debug logging to troubleshoot callback issues
 }
 
