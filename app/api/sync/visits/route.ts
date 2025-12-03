@@ -142,20 +142,23 @@ export async function POST(request: NextRequest) {
         let classification: 'COMMITTED_DATE' | 'ON_TIME' | 'LATE' | 'OVERDUE' | 'NOT_COMPLETED' = 'NOT_COMPLETED'
         if (schedule) {
           const committedDate = schedule.r1PlannedDate
-          const daysDiff = Math.floor(
-            (visitData.completedDate.getTime() - committedDate.getTime()) / (24 * 60 * 60 * 1000)
-          )
+          if (!committedDate) {
+            classification = 'NOT_COMPLETED'
+          } else {
+            const daysDiff = Math.floor(
+              (visitData.completedDate.getTime() - committedDate.getTime()) / (24 * 60 * 60 * 1000)
+            )
 
-          if (daysDiff === 0) {
-            classification = 'COMMITTED_DATE'
-          } else if (Math.abs(daysDiff) <= 5) {
-            classification = 'ON_TIME'
-          } else if (daysDiff > 5 && visitData.completedDate <= schedule.dueDate) {
-            classification = 'LATE'
-          } else if (visitData.completedDate > schedule.dueDate) {
-            classification = 'OVERDUE'
+            if (daysDiff === 0) {
+              classification = 'COMMITTED_DATE'
+            } else if (Math.abs(daysDiff) <= 5) {
+              classification = 'ON_TIME'
+            } else if (daysDiff > 5 && visitData.completedDate <= schedule.dueDate) {
+              classification = 'LATE'
+            } else if (visitData.completedDate > schedule.dueDate) {
+              classification = 'OVERDUE'
+            }
           }
-        }
 
         // Check if visit already exists (by equipment and completion date)
         const existingVisit = await prisma.maintenanceVisit.findFirst({
