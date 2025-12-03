@@ -35,6 +35,15 @@ export function WorkOrderManagement() {
   const [isUploading, setIsUploading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [dateRange, setDateRange] = useState<'7days' | '30days' | 'all'>('7days')
+  const [showManualForm, setShowManualForm] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [manualFormData, setManualFormData] = useState({
+    equipmentNumber: '',
+    workOrderNumber: '',
+    wmPlannedDate: '',
+    mtrPlannedStartDate: '',
+    mtrPlannedCompletionDate: '',
+  })
 
   // Fetch all work orders
   useEffect(() => {
@@ -183,12 +192,171 @@ export function WorkOrderManagement() {
     }
   }
 
+  const handleDelete = async (workOrderId: string) => {
+    if (!confirm('Are you sure you want to delete this work order? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/admin/work-orders/${workOrderId}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to delete work order')
+      }
+
+      // Refresh work orders
+      const refreshRes = await fetch('/api/admin/work-orders')
+      const refreshData = await refreshRes.json()
+      setAllWorkOrders(refreshData.workOrders || [])
+      alert('Work order deleted successfully!')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete work order')
+    }
+  }
+
+  const handleManualCreate = async () => {
+    if (!manualFormData.equipmentNumber || !manualFormData.workOrderNumber || !manualFormData.wmPlannedDate || !manualFormData.mtrPlannedCompletionDate) {
+      alert('Please fill in all required fields')
+      return
+    }
+
+    setIsCreating(true)
+    try {
+      const res = await fetch('/api/admin/work-orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          equipmentNumber: manualFormData.equipmentNumber,
+          workOrderNumber: manualFormData.workOrderNumber,
+          wmPlannedDate: new Date(manualFormData.wmPlannedDate).toISOString(),
+          mtrPlannedStartDate: manualFormData.mtrPlannedStartDate ? new Date(manualFormData.mtrPlannedStartDate).toISOString() : null,
+          mtrPlannedCompletionDate: new Date(manualFormData.mtrPlannedCompletionDate).toISOString(),
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to create work order')
+      }
+
+      // Reset form
+      setManualFormData({
+        equipmentNumber: '',
+        workOrderNumber: '',
+        wmPlannedDate: '',
+        mtrPlannedStartDate: '',
+        mtrPlannedCompletionDate: '',
+      })
+      setShowManualForm(false)
+
+      // Refresh work orders
+      const refreshRes = await fetch('/api/admin/work-orders')
+      const refreshData = await refreshRes.json()
+      setAllWorkOrders(refreshData.workOrders || [])
+      alert('Work order created successfully!')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to create work order')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4 text-gray-900">Work Order Management</h2>
       <p className="text-sm text-gray-700 mb-6">
         Upload work orders from CSV file.
       </p>
+
+      {/* Manual Creation Section */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Create Work Order Manually</h3>
+          <button
+            onClick={() => setShowManualForm(!showManualForm)}
+            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            {showManualForm ? 'Cancel' : 'Add Work Order'}
+          </button>
+        </div>
+
+        {showManualForm && (
+          <div className="bg-gray-50 p-4 rounded-lg mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Equipment Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={manualFormData.equipmentNumber}
+                  onChange={(e) => setManualFormData({ ...manualFormData, equipmentNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+                  placeholder="e.g., HOK-E25"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Work Order Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={manualFormData.workOrderNumber}
+                  onChange={(e) => setManualFormData({ ...manualFormData, workOrderNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+                  placeholder="e.g., 5000355448"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  WM Planned Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={manualFormData.wmPlannedDate}
+                  onChange={(e) => setManualFormData({ ...manualFormData, wmPlannedDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  MTR Planned Start Date
+                </label>
+                <input
+                  type="date"
+                  value={manualFormData.mtrPlannedStartDate}
+                  onChange={(e) => setManualFormData({ ...manualFormData, mtrPlannedStartDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Due Date (MTR Planned Completion) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={manualFormData.mtrPlannedCompletionDate}
+                  onChange={(e) => setManualFormData({ ...manualFormData, mtrPlannedCompletionDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleManualCreate}
+                  disabled={isCreating}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {isCreating ? 'Creating...' : 'Create Work Order'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* CSV Upload Section */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
@@ -396,7 +564,7 @@ export function WorkOrderManagement() {
                   WM Planned Date
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
-                  MTR Planned Start
+                  MTR Planned Date
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
                   Due Date
@@ -406,6 +574,9 @@ export function WorkOrderManagement() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
                   Upload Timestamp
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -431,6 +602,20 @@ export function WorkOrderManagement() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {new Date(wo.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <button
+                      onClick={() => handleDelete(wo.id)}
+                      className="p-1.5 text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded transition-colors relative group"
+                      title="Delete work order"
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M18.8286 5.04036C19.0824 5.2942 19.0824 5.70575 18.8286 5.9596L12.9231 11.865L18.8286 17.7702C19.057 17.9987 19.0799 18.3549 18.8971 18.6089L18.8286 18.6895C18.5748 18.9433 18.1632 18.9433 17.9094 18.6895L12.0041 12.784L6.09872 18.6895C5.84488 18.9433 5.43333 18.9433 5.17949 18.6895C4.92565 18.4356 4.92565 18.0241 5.17949 17.7702L11.0851 11.865L5.17949 5.9596C4.95103 5.73114 4.92818 5.37493 5.11095 5.12092L5.17949 5.04036C5.43333 4.78652 5.84488 4.78652 6.09872 5.04036L12.0041 10.946L17.9094 5.04036C18.1632 4.78652 18.5748 4.78652 18.8286 5.04036Z" fill="currentColor"/>
+                      </svg>
+                      <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity">
+                        Delete work order
+                      </span>
+                    </button>
                   </td>
                 </tr>
               ))}

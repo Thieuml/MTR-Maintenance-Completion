@@ -1,0 +1,34 @@
+
+> mtr-maintenance-tracking@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.33
+  - Environments: .env.local, .env.production
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./app/validation/page.tsx
+13:9  Warning: The 'today' object construction makes the dependencies of useMemo Hook (at line 40) change on every render. To fix this, wrap the initialization of 'today' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+Failed to compile.
+
+./app/validation/page.tsx:30:37
+Type error: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | null' is not assignable to parameter of type 'string | number | Date'.
+      Type 'null' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | null' is not assignable to parameter of type 'string | number'.
+      Type 'null' is not assignable to type 'string | number'.
+
+[0m [90m 28 |[39m   [36mconst[39m pendingSchedules [33m=[39m useMemo(() [33m=>[39m {[0m
+[0m [90m 29 |[39m     [36mreturn[39m schedules[33m.[39mfilter((schedule[33m:[39m [33mSchedule[39m) [33m=>[39m {[0m
+[0m[31m[1m>[22m[39m[90m 30 |[39m       [36mconst[39m scheduleDate [33m=[39m [36mnew[39m [33mDate[39m(schedule[33m.[39mr1PlannedDate)[0m
+[0m [90m    |[39m                                     [31m[1m^[22m[39m[0m
+[0m [90m 31 |[39m       scheduleDate[33m.[39msetHours([35m0[39m[33m,[39m [35m0[39m[33m,[39m [35m0[39m[33m,[39m [35m0[39m)[0m
+[0m [90m 32 |[39m       [0m
+[0m [90m 33 |[39m       [36mconst[39m isPastDate [33m=[39m scheduleDate [33m<[39m today[0m
+Next.js build worker exited with code: 1 and signal: null

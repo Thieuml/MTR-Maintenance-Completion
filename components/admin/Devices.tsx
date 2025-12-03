@@ -35,23 +35,36 @@ export function Devices() {
     canUse2300Slot?: boolean
   }>({})
 
+  const [error, setError] = useState<string | null>(null)
+
   // Load all devices from Looker
   useEffect(() => {
     async function loadDevices() {
       setLoading(true)
+      setError(null)
       try {
         const res = await fetch('/api/admin/equipment')
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(errorData.error || `Failed to fetch equipment: ${res.statusText}`)
+        }
         const data = await res.json()
         
         // Also fetch mappings
         const mappingRes = await fetch('/api/admin/equipment-mapping')
+        if (!mappingRes.ok) {
+          const errorData = await mappingRes.json().catch(() => ({}))
+          throw new Error(errorData.error || `Failed to fetch mappings: ${mappingRes.statusText}`)
+        }
         const mappingData = await mappingRes.json()
         
         // Create a map of equipment ID to mapping
         const mappingMap = new Map<string, any>()
-        mappingData.mappings.forEach((m: any) => {
-          mappingMap.set(m.equipment.id, m)
-        })
+        if (mappingData.mappings) {
+          mappingData.mappings.forEach((m: any) => {
+            mappingMap.set(m.equipment.id, m)
+          })
+        }
         
         // Merge devices with their mappings
         const devicesWithMappings = (data.equipment || []).map((device: any) => ({
@@ -62,6 +75,7 @@ export function Devices() {
         setDevices(devicesWithMappings)
       } catch (error) {
         console.error('Failed to load devices:', error)
+        setError(error instanceof Error ? error.message : 'Failed to load devices')
       } finally {
         setLoading(false)
       }
@@ -218,6 +232,24 @@ export function Devices() {
         <div className="text-center py-8 text-gray-500">
           Loading devices...
         </div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-semibold text-red-800">Error loading devices</h3>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -245,7 +277,16 @@ export function Devices() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredDevices.map((device) => {
+                {filteredDevices.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                      {showUnmapped 
+                        ? 'No devices found. This could mean: (1) Looker connection issue, (2) No devices in Looker, or (3) Database sync needed.'
+                        : 'No mapped devices found. Enable "Show unmapped devices" to see all devices.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDevices.map((device) => {
                   const deviceKey = device.id || device.equipmentNumber
                   const isEditing = editingId === deviceKey
                   const hasMapping = !!device.mapping
@@ -395,14 +436,9 @@ export function Devices() {
                       </td>
                     </tr>
                   )
-                })}
+                }))}
               </tbody>
             </table>
-            {filteredDevices.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No devices found. Check Looker connection.
-              </div>
-            )}
           </div>
         </div>
       )}

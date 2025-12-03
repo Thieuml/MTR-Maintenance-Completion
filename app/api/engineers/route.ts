@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
     const { zoneId, active, hasCertificates, search } = validation.data
 
     // Build where clause
-    const where: any = {}
+    const where: any = {
+      active: true, // Default to active engineers only
+    }
 
     if (active !== undefined) {
       where.active = active

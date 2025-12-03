@@ -27,9 +27,13 @@ interface ScheduleCardProps {
   }
   onClick?: () => void
   isDragging?: boolean
+  isEditMode?: boolean
 }
 
-export function ScheduleCard({ schedule, onClick, isDragging }: ScheduleCardProps) {
+export function ScheduleCard({ schedule, onClick, isDragging, isEditMode = false }: ScheduleCardProps) {
+  const isCompleted = schedule.status === 'COMPLETED' || schedule.status === 'COMPLETED_LATE'
+  const isDraggable = isEditMode && !isCompleted
+
   const {
     attributes,
     listeners,
@@ -40,6 +44,7 @@ export function ScheduleCard({ schedule, onClick, isDragging }: ScheduleCardProp
     data: {
       schedule,
     },
+    disabled: !isDraggable,
   })
 
   const style = {
@@ -47,10 +52,27 @@ export function ScheduleCard({ schedule, onClick, isDragging }: ScheduleCardProp
     opacity: isDragging ? 0.5 : 1,
   }
 
-  // Get validation status
+  // Get validation status - must match logic in work-order-tracking/page.tsx
   const getValidationStatus = () => {
     if (schedule.status === 'COMPLETED' || schedule.status === 'COMPLETED_LATE') return 'completed'
-    if (schedule.status === 'MISSED') return 'to_reschedule'
+    
+    // Check for MISSED or RESCHEDULED status (both need rescheduling)
+    if (schedule.status === 'MISSED' || schedule.status === 'RESCHEDULED') {
+      // For RESCHEDULED, check if the new date has passed
+      const scheduleDate = new Date(schedule.r1PlannedDate)
+      scheduleDate.setHours(0, 0, 0, 0)
+      
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      // RESCHEDULED with past date needs rescheduling again
+      // RESCHEDULED with future date is planned, don't show status
+      if (schedule.status === 'RESCHEDULED' && scheduleDate >= today) {
+        return null // Future rescheduled date - don't show status
+      }
+      
+      return 'to_reschedule'
+    }
     
     // Don't show pending for future schedules
     const scheduleDate = new Date(schedule.r1PlannedDate)
@@ -94,7 +116,9 @@ export function ScheduleCard({ schedule, onClick, isDragging }: ScheduleCardProp
       {...listeners}
       {...attributes}
       onClick={onClick}
-      className={`p-1.5 rounded border ${cardBgColor} ${cardBorderColor} cursor-move hover:shadow-md transition-all text-xs ${
+      className={`p-1.5 rounded border ${cardBgColor} ${cardBorderColor} ${
+        isDraggable ? 'cursor-move hover:shadow-md' : 'cursor-default'
+      } transition-all text-xs ${
         !schedule.fixedEngineer && !schedule.rotatingEngineer
           ? 'border-dashed border-blue-400'
           : ''

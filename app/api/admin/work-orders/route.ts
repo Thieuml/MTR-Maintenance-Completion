@@ -11,6 +11,12 @@ const workOrderSchema = z.object({
 /**
  * GET /api/admin/work-orders
  * List work orders
+ * 
+ * Query parameters:
+ * - equipmentId: Filter by equipment
+ * - from/to: Date range filter
+ * - completedDays: Number of days to look back for completed items (default: 90)
+ * - includeOldCompleted: Include all completed items regardless of age (default: false)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,21 +24,53 @@ export async function GET(request: NextRequest) {
     const equipmentId = searchParams.get('equipmentId')
     const from = searchParams.get('from')
     const to = searchParams.get('to')
+    const completedDays = parseInt(searchParams.get('completedDays') || '90', 10)
+    const includeOldCompleted = searchParams.get('includeOldCompleted') === 'true'
 
     const where: any = {}
     if (equipmentId) where.equipmentId = equipmentId
-    if (from || to) {
-      where.r1PlannedDate = {}
-      if (from) where.r1PlannedDate.gte = new Date(from)
-      if (to) where.r1PlannedDate.lte = new Date(to)
+
+    // Optimize: Exclude old completed items unless explicitly requested
+    // Only fetch completed items updated in the last N days (default 90 days)
+    // This prevents fetching thousands of old completed work orders
+    if (!includeOldCompleted) {
+      const completedCutoffDate = new Date()
+      completedCutoffDate.setDate(completedCutoffDate.getDate() - completedDays)
+      completedCutoffDate.setHours(0, 0, 0, 0)
+
+      // Build OR condition: either not completed, or completed recently
+      where.OR = [
+        { status: { not: 'COMPLETED' } }, // All non-completed items
+        {
+          status: 'COMPLETED',
+          updatedAt: { gte: completedCutoffDate }, // Only recent completed items
+        },
+      ]
     }
 
+    // Don't filter by r1PlannedDate - SKIPPED/MISSED items have null r1PlannedDate
+    // Fetch all work orders and let the frontend filter by status/date
+
+    // Optimized: Don't fetch visits (they cause N+1 queries and are rarely needed)
+    // Priority ordering: SKIPPED/MISSED first (actionable items), then others
     const schedules = await prisma.schedule.findMany({
       where: {
         ...where,
         workOrderNumber: { not: null },
       },
-      include: {
+      select: {
+        id: true,
+        workOrderNumber: true,
+        r0PlannedDate: true,
+        r1PlannedDate: true,
+        mtrPlannedStartDate: true,
+        dueDate: true,
+        status: true,
+        lastSkippedDate: true,
+        skippedCount: true,
+        isLate: true,
+        updatedAt: true, // Include updatedAt for frontend filtering
+        createdAt: true,
         equipment: {
           select: {
             id: true,
@@ -46,13 +84,26 @@ export async function GET(request: NextRequest) {
             name: true,
           },
         },
+        // Removed visits to improve performance - fetch separately if needed
       },
-      orderBy: {
-        r1PlannedDate: 'desc',
-      },
+      orderBy: [
+        { status: 'asc' }, // Group by status first
+        { updatedAt: 'desc' }, // Then by most recently updated
+      ],
+      // Increased limit to ensure all work orders are included
+      // With completed items filtered, we should stay well below 1000
+      take: 1000,
     })
 
-    return NextResponse.json({ workOrders: schedules })
+    return NextResponse.json({ 
+      workOrders: schedules,
+      // Include metadata about filtering
+      meta: {
+        completedDaysFilter: completedDays,
+        includeOldCompleted,
+        totalReturned: schedules.length,
+      },
+    })
   } catch (error) {
     console.error('[Work Orders GET] Error:', error)
     return NextResponse.json(

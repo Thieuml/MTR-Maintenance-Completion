@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Navigation } from '@/components/Navigation'
+import { Navigation } from '@/components/shared/Navigation'
 import { useZones } from '@/lib/hooks'
 import useSWR from 'swr'
 
@@ -130,9 +130,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="flex-1 overflow-auto p-6">
+      <main className="ml-64 overflow-auto p-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Maintenance Analytics Dashboard</h1>
@@ -225,13 +225,13 @@ export default function DashboardPage() {
                   </div>
                   {expandedDetails.has('completion') && (
                     <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
-                      <strong>Definition:</strong> Percentage of maintenance work orders that were completed before their due date.
+                      <strong>Definition:</strong> Percentage of maintenance work orders that were completed before their Due Date.
                       <br /><br />
-                      <strong>Calculation:</strong> (Number of completed work orders with due date in the past) ÷ (Total work orders with due date in the past) × 100
+                      <strong>Calculation:</strong> (Number of completed work orders with Due Date in the past) ÷ (Total work orders with Due Date in the past) × 100
                       <br /><br />
-                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Start Date) within the selected period. Among those, only work orders with a due date that has already passed are counted in the numerator and denominator. Work orders scheduled in the period but not yet due are excluded.
+                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Date) within the selected period. Among those, only work orders with a Due Date that has already passed are counted in the numerator and denominator. Work orders scheduled in the period but not yet due are excluded.
                       <br /><br />
-                      <strong>Note:</strong> Only counts work orders where the due date has already passed. Work orders not yet due are excluded from this calculation.
+                      <strong>Note:</strong> Only counts work orders where the Due Date has already passed. Work orders not yet due are excluded from this calculation.
                     </div>
                   )}
                   <div className="space-y-4">
@@ -321,13 +321,13 @@ export default function DashboardPage() {
                   </div>
                   {expandedDetails.has('onTime') && (
                     <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
-                      <strong>Definition:</strong> Percentage of completed maintenance work orders that were finished on time (within 6 days of the MTR planned start date).
+                      <strong>Definition:</strong> Percentage of completed maintenance work orders that were finished on time (within 6 days of the MTR Planned Date).
                       <br /><br />
                       <strong>Calculation:</strong> (Number of on-time completed work orders) ÷ (Total completed work orders) × 100
                       <br /><br />
                       <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>executed</strong> (completed) within the selected period. Only work orders that have been completed are included in both the numerator and denominator. Work orders scheduled in the period but not yet completed are excluded.
                       <br /><br />
-                      <strong>On-Time Criteria:</strong> Maintenance completed within 6 days (0-6 days) from the MTR planned start date. Late maintenance is completed 7+ days after the MTR planned start date.
+                      <strong>On-Time Criteria:</strong> Maintenance completed within 6 days (0-6 days) from the MTR Planned Date. Late maintenance is completed 7+ days after the MTR Planned Date.
                     </div>
                   )}
                   <div className="space-y-4">
@@ -420,9 +420,9 @@ export default function DashboardPage() {
                     <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
                       <strong>Definition:</strong> Average number of days between when WM (WeMaintain) schedules maintenance and when MTR originally planned it to start.
                       <br /><br />
-                      <strong>Calculation:</strong> Average of (WM Planned Start Date - MTR Planned Start Date) for all scheduled work orders.
+                      <strong>Calculation:</strong> Average of (WM Planned Date - MTR Planned Date) for all scheduled work orders.
                       <br /><br />
-                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Start Date) within the selected period. Only work orders that have both a WM Planned Start Date and an MTR Planned Start Date are included in the average.
+                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Date) within the selected period. Only work orders that have both a WM Planned Date and an MTR Planned Date are included in the average.
                       <br /><br />
                       <strong>Interpretation:</strong> Positive values mean WM scheduled later than MTR&apos;s plan. Zero means perfect alignment. This measures WM&apos;s ability to schedule maintenance on the dates expected by MTR.
                     </div>
@@ -448,12 +448,12 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div className="text-xs text-gray-500 mt-2">
-                        Days between WM Start Date and MTR Start Date
+                        Days between WM Planned Date and MTR Planned Date
                       </div>
                     </div>
                     <div className="pt-2 border-t border-gray-200">
                       <div className="text-sm text-gray-600">
-                        Shows how many days WM scheduled after MTR planned date
+                        Shows how many days WM scheduled after MTR Planned Date
                       </div>
                       {summary.avgPlanningDeviation !== null && summary.avgPlanningDeviation > 0 && (
                         <div className="mt-2 text-xs text-gray-500">
@@ -525,7 +525,7 @@ export default function DashboardPage() {
                     <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
                       <strong>Definition:</strong> Average number of days between when maintenance was actually completed and when WM originally planned it to start.
                       <br /><br />
-                      <strong>Calculation:</strong> Average of (Completion Date - WM Planned Start Date) for all completed work orders.
+                      <strong>Calculation:</strong> Average of (Completion Date - WM Planned Date) for all completed work orders.
                       <br /><br />
                       <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>executed</strong> (completed) within the selected period. Only work orders that have been completed are included in the average. Work orders scheduled in the period but not yet completed are excluded.
                       <br /><br />
@@ -553,7 +553,7 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div className="text-xs text-gray-500 mt-2">
-                        Days between completion date and WM Planned Start Date
+                        Days between completion date and WM Planned Date
                       </div>
                     </div>
                     <div className="pt-2 border-t border-gray-200">

@@ -22,6 +22,7 @@ interface ScheduleCalendarProps {
   fromDate: Date
   toDate: Date
   viewMode: 'week' | 'month'
+  isEditMode?: boolean
   onScheduleMove?: () => void
 }
 
@@ -63,6 +64,7 @@ export function ScheduleCalendar({
   fromDate,
   toDate,
   viewMode,
+  isEditMode = false,
   onScheduleMove,
 }: ScheduleCalendarProps) {
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -75,6 +77,7 @@ export function ScheduleCalendar({
     })
   )
   // Generate dates - always start from Sunday, show 7 days for week view
+  // Use UTC dates consistently to avoid timezone issues
   const dates = useMemo(() => {
     const dateList: Date[] = []
     const currentDate = new Date(fromDate)
@@ -82,19 +85,29 @@ export function ScheduleCalendar({
     if (viewMode === 'week') {
       // Always show exactly 7 days starting from Sunday
       for (let i = 0; i < 7; i++) {
-        dateList.push(new Date(currentDate))
+        const date = new Date(currentDate)
+        dateList.push(date)
         currentDate.setDate(currentDate.getDate() + 1)
       }
     } else {
       // Month view - show all days from first Sunday to last Saturday
       while (currentDate <= toDate) {
-        dateList.push(new Date(currentDate))
+        const date = new Date(currentDate)
+        dateList.push(date)
         currentDate.setDate(currentDate.getDate() + 1)
       }
     }
     
     return dateList
   }, [fromDate, toDate, viewMode])
+
+  // Helper function to get date key consistently (YYYY-MM-DD format)
+  const getDateKey = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
   // Clear pending moves when schedules data confirms the move
   useEffect(() => {
@@ -108,14 +121,18 @@ export function ScheduleCalendar({
       prev.forEach((pendingMove, scheduleId) => {
         const schedule = schedules.find((s) => s.id === scheduleId)
         if (schedule) {
-          const expectedDateKey = new Date(pendingMove.newDate).toISOString().split('T')[0]
-          const actualDateKey = new Date(schedule.r1PlannedDate).toISOString().split('T')[0]
+          const expectedDateKey = getDateKey(new Date(pendingMove.newDate))
+          const actualDateKey = getDateKey(new Date(schedule.r1PlannedDate))
           
           // If the schedule is now in the expected position, clear the pending move
           if (actualDateKey === expectedDateKey && schedule.timeSlot === pendingMove.newTimeSlot) {
             newMap.delete(scheduleId)
             hasChanges = true
           }
+        } else {
+          // Schedule not found - might have been deleted, clear the pending move
+          newMap.delete(scheduleId)
+          hasChanges = true
         }
       })
 
@@ -136,11 +153,11 @@ export function ScheduleCalendar({
       
       if (pendingMove) {
         // Use the pending move's date and time slot
-        dateKey = new Date(pendingMove.newDate).toISOString().split('T')[0]
+        dateKey = getDateKey(new Date(pendingMove.newDate))
         timeSlot = pendingMove.newTimeSlot
       } else {
         // Use the original schedule date and time slot
-        dateKey = new Date(schedule.r1PlannedDate).toISOString().split('T')[0]
+        dateKey = getDateKey(new Date(schedule.r1PlannedDate))
         timeSlot = schedule.timeSlot
       }
       
@@ -192,9 +209,17 @@ export function ScheduleCalendar({
 
     if (!over) return
 
+    // Don't allow dragging if not in edit mode
+    if (!isEditMode) return
+
     const scheduleId = active.id as string
     const schedule = schedules.find((s) => s.id === scheduleId)
     if (!schedule) return
+
+    // Prevent moving completed schedules
+    if (schedule.status === 'COMPLETED' || schedule.status === 'COMPLETED_LATE') {
+      return
+    }
 
     const dropData = over.data.current
     if (!dropData || !dropData.dateKey || !dropData.timeSlot) return
@@ -202,12 +227,14 @@ export function ScheduleCalendar({
     const targetDateKey = dropData.dateKey
     const targetTimeSlot = dropData.timeSlot
 
-    // Check if target slot already has a schedule (for swapping)
-    const targetSchedules = schedulesByDateAndTime.get(targetDateKey)?.get(targetTimeSlot) || []
-    const targetSchedule = targetSchedules.length > 0 ? targetSchedules[0] : null
+    // Parse target date consistently - dateKey is in format YYYY-MM-DD
+    // Parse as local date to match how dates are displayed in the calendar
+    const targetDateParts = targetDateKey.split('-')
+    const year = parseInt(targetDateParts[0], 10)
+    const month = parseInt(targetDateParts[1], 10) - 1 // Month is 0-indexed
+    const day = parseInt(targetDateParts[2], 10)
 
-    // Build new date with time from slot
-    const targetDate = new Date(targetDateKey)
+    // Set time based on slot
     let hour = 0
     let minute = 0
     if (targetTimeSlot === 'SLOT_2300') {
@@ -220,18 +247,93 @@ export function ScheduleCalendar({
       hour = 3
       minute = 30
     }
-    targetDate.setHours(hour, minute, 0, 0)
 
-    // Optimistically update the schedule position
+    // Create date with the intended local date/time
+    // This ensures the date portion matches what the user sees, regardless of timezone
+    const targetDate = new Date(year, month, day, hour, minute, 0, 0)
+
+    // Prevent moving to past dates
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const targetDateOnly = new Date(targetDate)
+    targetDateOnly.setHours(0, 0, 0, 0)
+    
+    if (targetDateOnly < today) {
+      alert('Cannot move schedule to a past date.')
+      return
+    }
+
+    // Check if target slot already has a schedule (for swapping)
+    // Use schedulesByDateAndTime to check current display state (includes pending moves)
+    const targetSchedules = schedulesByDateAndTime.get(targetDateKey)?.get(targetTimeSlot) || []
+    // Find the target schedule from display, but get the actual schedule object from schedules array
+    const targetDisplaySchedule = targetSchedules.find((s: any) => s.id !== scheduleId)
+    const targetSchedule = targetDisplaySchedule 
+      ? schedules.find((s) => s.id === targetDisplaySchedule.id)
+      : null
+
+    // Check if moving a pending card (past date, not completed)
+    const scheduleDate = new Date(schedule.r1PlannedDate)
+    scheduleDate.setHours(0, 0, 0, 0)
+    const isPending = scheduleDate < today && 
+      schedule.status !== 'COMPLETED' && 
+      schedule.status !== 'COMPLETED_LATE' &&
+      schedule.status !== 'MISSED' &&
+      schedule.status !== 'RESCHEDULED'
+
+    // Check for 23:00 slot eligibility warning
+    const isInvalid2300Slot = targetTimeSlot === 'SLOT_2300' && schedule.equipment.canUse2300Slot !== true
+
+    // Show confirmation dialogs
+    if (isInvalid2300Slot) {
+      const confirmed = window.confirm(
+        'Warning: This equipment is not eligible for the 23:00 slot. Only equipment with the clock icon can be scheduled at 23:00.\n\nDo you want to proceed with this move?'
+      )
+      if (!confirmed) {
+        return
+      }
+    }
+
+    if (isPending) {
+      const confirmed = window.confirm(
+        'This work order is marked as Pending (past date, not yet validated).\n\nPlease confirm:\n- This work order was NOT executed\n- You want to reschedule it\n\nDo you want to proceed with rescheduling?'
+      )
+      if (!confirmed) {
+        return
+      }
+    }
+
+    // Get original position of the schedule being moved
+    const originalDateKey = getDateKey(new Date(schedule.r1PlannedDate))
+    const originalTimeSlot = schedule.timeSlot
+
+    // Optimistically update BOTH schedules immediately (for swap)
     setPendingMoves((prev) => {
       const newMap = new Map(prev)
+      
+      // Move the dragged schedule to target position
       newMap.set(scheduleId, {
         newDate: targetDate.toISOString(),
         newTimeSlot: targetTimeSlot,
       })
+      
+      // If swapping, also move the target schedule to the original position
+      if (targetSchedule) {
+        // Use the original position from the schedule object (not affected by pending moves)
+        newMap.set(targetSchedule.id, {
+          newDate: schedule.r1PlannedDate, // Original position of dragged schedule
+          newTimeSlot: originalTimeSlot,
+        })
+      }
+      
       return newMap
     })
 
+    // Format date for API - use ISO string but ensure date portion is correct
+    // Create a date string that preserves the intended date regardless of timezone
+    // Format: YYYY-MM-DDTHH:mm:ss (using local time, then convert to ISO)
+    const dateForAPI = new Date(year, month, day, hour, minute, 0, 0)
+    
     try {
       const response = await fetch(`/api/schedules/${scheduleId}/move`, {
         method: 'POST',
@@ -239,18 +341,22 @@ export function ScheduleCalendar({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          newDate: targetDate.toISOString(),
+          newDate: dateForAPI.toISOString(),
           newTimeSlot: targetTimeSlot,
           swapWithScheduleId: targetSchedule?.id || undefined,
+          allowInvalid2300Slot: isInvalid2300Slot, // Flag to allow move despite warning
         }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        // Revert optimistic update on error
+        // Revert optimistic update on error (both schedules if swapping)
         setPendingMoves((prev) => {
           const newMap = new Map(prev)
           newMap.delete(scheduleId)
+          if (targetSchedule) {
+            newMap.delete(targetSchedule.id)
+          }
           return newMap
         })
         alert(`Error moving schedule: ${error.error}`)
@@ -264,10 +370,13 @@ export function ScheduleCalendar({
       }
     } catch (error) {
       console.error('Error moving schedule:', error)
-      // Revert optimistic update on error
+      // Revert optimistic update on error (both schedules if swapping)
       setPendingMoves((prev) => {
         const newMap = new Map(prev)
         newMap.delete(scheduleId)
+        if (targetSchedule) {
+          newMap.delete(targetSchedule.id)
+        }
         return newMap
       })
       alert('Failed to move schedule. Please try again.')
@@ -336,7 +445,7 @@ export function ScheduleCalendar({
                   {timeSlot.label}
                 </td>
                 {dates.map((date) => {
-                  const dateKey = date.toISOString().split('T')[0]
+                  const dateKey = getDateKey(date)
                   const isToday = date.toDateString() === today.toDateString()
                   const daySchedules = schedulesByDateAndTime.get(dateKey)?.get(timeSlot.slot) || []
                   const isEmpty = daySchedules.length === 0
@@ -354,6 +463,7 @@ export function ScheduleCalendar({
                             key={schedule.id}
                             schedule={schedule}
                             isDragging={activeId === schedule.id}
+                            isEditMode={isEditMode}
                           />
                         ))}
                       </div>
@@ -367,7 +477,7 @@ export function ScheduleCalendar({
       </div>
       <DragOverlay>
         {activeSchedule ? (
-          <ScheduleCard schedule={activeSchedule} isDragging={true} />
+          <ScheduleCard schedule={activeSchedule} isDragging={true} isEditMode={isEditMode} />
         ) : null}
       </DragOverlay>
     </DndContext>

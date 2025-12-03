@@ -222,20 +222,33 @@ export async function DELETE(
       )
     }
 
-    // Check if schedule has visits or reschedules
-    if (existing.visits.length > 0) {
+    // Check if schedule can be deleted (only PLANNED, PENDING, SKIPPED can be deleted)
+    if (existing.status === 'MISSED' || existing.status === 'COMPLETED') {
       return NextResponse.json(
         {
-          error: 'Cannot delete schedule with existing visits',
-          visitsCount: existing.visits.length,
+          error: 'Cannot delete MISSED or COMPLETED work orders. Statistics integrity must be maintained.',
+          currentStatus: existing.status,
         },
         { status: 400 }
       )
     }
 
-    // Delete schedule
-    await prisma.schedule.delete({
+    if (!['PLANNED', 'PENDING', 'SKIPPED'].includes(existing.status)) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete schedule with status: ${existing.status}. Only PLANNED, PENDING, or SKIPPED schedules can be deleted.`,
+          currentStatus: existing.status,
+        },
+        { status: 400 }
+      )
+    }
+
+    // Soft delete: Set status to CANCELLED (preserves audit trail)
+    await prisma.schedule.update({
       where: { id: params.id },
+      data: {
+        status: 'CANCELLED',
+      },
     })
 
     return NextResponse.json({

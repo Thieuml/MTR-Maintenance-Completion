@@ -3,6 +3,20 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["hkg1"]
+  "regions": ["hkg1"],
+  "crons": [
+    {
+      "path": "/api/cron/planned-to-pending",
+      "schedule": "0 23 * * *"
+    }
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "LOOKER_API_BASE_URL": "@looker_api_base_url",
+    "LOOKER_CLIENT_ID": "@looker_client_id",
+    "LOOKER_CLIENT_SECRET": "@looker_client_secret",
+    "NOVU_API_KEY": "@novu_api_key",
+    "CRON_SECRET": "@cron_secret"
+  }
 }
 

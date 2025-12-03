@@ -5,7 +5,7 @@ import { z } from 'zod'
 const assignEngineerSchema = z.object({
   zoneId: z.string(),
   engineerId: z.string(),
-  role: z.enum(['FIXED_QUALIFIED', 'FIXED']),
+  role: z.enum(['FIXED_QUALIFIED', 'FIXED']).optional(), // Optional, will be auto-determined
 })
 
 /**
@@ -72,32 +72,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { zoneId, engineerId, role } = validation.data
+    const { zoneId, engineerId, role: providedRole } = validation.data
+
+    // Get engineer to check certificates
+    const engineer = await prisma.engineer.findUnique({
+      where: { id: engineerId },
+    })
+
+    if (!engineer) {
+      return NextResponse.json(
+        { error: 'Engineer not found' },
+        { status: 404 }
+      )
+    }
+
+    // Auto-determine role based on certificates if not provided
+    const role = providedRole || (engineer.hasCPCert && engineer.hasRWCert ? 'FIXED_QUALIFIED' : 'FIXED')
 
     // Validate FIXED_QUALIFIED requires CP & RW certs
-    if (role === 'FIXED_QUALIFIED') {
-      const engineer = await prisma.engineer.findUnique({
-        where: { id: engineerId },
-      })
-
-      if (!engineer) {
-        return NextResponse.json(
-          { error: 'Engineer not found' },
-          { status: 404 }
-        )
-      }
-
-      if (!engineer.hasCPCert || !engineer.hasRWCert) {
-        return NextResponse.json(
-          {
-            error: 'FIXED_QUALIFIED engineer must have CP and RW certificates',
-            engineer: engineer.name,
-            hasCPCert: engineer.hasCPCert,
-            hasRWCert: engineer.hasRWCert,
-          },
-          { status: 400 }
-        )
-      }
+    if (role === 'FIXED_QUALIFIED' && (!engineer.hasCPCert || !engineer.hasRWCert)) {
+      return NextResponse.json(
+        {
+          error: 'FIXED_QUALIFIED engineer must have CP and RW certificates',
+          engineer: engineer.name,
+          hasCPCert: engineer.hasCPCert,
+          hasRWCert: engineer.hasRWCert,
+        },
+        { status: 400 }
+      )
     }
 
     // Create or update assignment

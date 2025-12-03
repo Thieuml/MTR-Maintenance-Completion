@@ -23,20 +23,22 @@ export function useSchedule(
   zoneId?: string,
   from?: string,
   to?: string,
-  status?: string
+  status?: string,
+  includeVisits: boolean = false // Default to false for performance
 ) {
   const params = new URLSearchParams()
   if (zoneId) params.append('zoneId', zoneId)
   if (from) params.append('from', from)
   if (to) params.append('to', to)
   if (status) params.append('status', status)
+  if (!includeVisits) params.append('includeVisits', 'false')
 
   const { data, error, isLoading, mutate } = useSWR(
     `/api/schedules?${params.toString()}`,
     fetcher,
     {
-      refreshInterval: 30000, // Refresh every 30 seconds
-      revalidateOnFocus: true,
+      refreshInterval: 120000, // Refresh every 2 minutes (reduced from 30 seconds)
+      // revalidateOnFocus is disabled globally in SWRProvider
     }
   )
 
@@ -65,8 +67,8 @@ export function useEngineers(
     `/api/engineers?${params.toString()}`,
     fetcher,
     {
-      refreshInterval: 60000, // Refresh every minute
-      revalidateOnFocus: true,
+      refreshInterval: 120000, // Refresh every 2 minutes (reduced from 60 seconds)
+      // revalidateOnFocus is disabled globally in SWRProvider
     }
   )
 
@@ -86,7 +88,8 @@ export function useZones() {
     '/api/zones',
     fetcher,
     {
-      revalidateOnFocus: false, // Zones don't change often
+      // Zones don't change often, no refresh interval needed
+      // revalidateOnFocus is disabled globally in SWRProvider
     }
   )
 

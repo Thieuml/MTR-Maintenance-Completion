@@ -118,9 +118,9 @@ export async function POST(request: NextRequest) {
 
     const equipmentIndex = getColumnIndex(['Equipment No', 'Equipment No.', 'equipment no'])
     const woIndex = getColumnIndex(['WO Number', 'WO', 'wo number'])
-    const wmDateIndex = getColumnIndex(['WM Planned Start Date', 'WM Planned Start Date ', 'WM Planned', 'wm planned start date'])
-    const mtrStartIndex = getColumnIndex(['MTR plan start date', 'MTR plan start', 'mtr plan start date'])
-    const mtrCompletionIndex = getColumnIndex(['MTR Planned Completion Date', 'MTR Planned Completion', 'mtr planned completion date'])
+    const wmDateIndex = getColumnIndex(['WM Planned Start Date', 'WM Planned Start Date ', 'WM Planned Date', 'WM Planned', 'wm planned start date', 'wm planned date'])
+    const mtrStartIndex = getColumnIndex(['MTR plan start date', 'MTR plan start', 'MTR Planned Date', 'MTR Planned Start Date', 'mtr plan start date', 'mtr planned date'])
+    const mtrCompletionIndex = getColumnIndex(['MTR Planned Completion Date', 'MTR Planned Completion', 'Due Date', 'mtr planned completion date', 'due date'])
 
     console.log('[Upload] Column indices:', {
       equipmentIndex,

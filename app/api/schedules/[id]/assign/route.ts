@@ -79,6 +79,13 @@ export async function POST(
     }
 
     // Check engineer availability
+    if (!schedule.r1PlannedDate) {
+      return NextResponse.json(
+        { error: 'Schedule does not have a planned date' },
+        { status: 400 }
+      )
+    }
+    
     const availability = await checkEngineerAvailability(
       engineerId,
       schedule.r1PlannedDate,

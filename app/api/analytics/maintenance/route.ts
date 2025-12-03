@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
       
       const completedCondition: any = {
         status: {
-          in: ['COMPLETED', 'COMPLETED_LATE'],
+          in: ['COMPLETED'],
         },
       }
       if (expandedFrom || expandedTo) {
@@ -157,8 +157,11 @@ export async function GET(request: NextRequest) {
       let completionDate =
         mostRecentVisit?.completionDate || mostRecentVisit?.actualEndDate || null
       
-      // If schedule status is COMPLETED/COMPLETED_LATE but no visit record, use r1PlannedDate
-      if (!completionDate && (schedule.status === 'COMPLETED' || schedule.status === 'COMPLETED_LATE')) {
+      // Skip schedules without r1PlannedDate
+      if (!schedule.r1PlannedDate) return null
+      
+      // If schedule status is COMPLETED but no visit record, use r1PlannedDate
+      if (!completionDate && schedule.status === 'COMPLETED') {
         completionDate = schedule.r1PlannedDate
       }
 
@@ -205,6 +208,7 @@ export async function GET(request: NextRequest) {
         zoneKey,
       }
     })
+    .filter((p): p is NonNullable<typeof p> => p !== null)
 
     // Filter processed schedules based on date range:
     // - For Completion Rate and Planning Deviation: filter by r1PlannedDate (scheduled date)
@@ -212,6 +216,7 @@ export async function GET(request: NextRequest) {
     // We'll apply these filters when calculating each indicator
     const scheduledInRange = fromDate && toDate
       ? processed.filter((p) => {
+          if (!p.r1PlannedDate) return false
           const scheduled = new Date(p.r1PlannedDate)
           scheduled.setHours(0, 0, 0, 0)
           return scheduled >= fromDate! && scheduled <= toDate!

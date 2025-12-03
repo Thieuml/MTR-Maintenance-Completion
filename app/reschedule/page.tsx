@@ -2,8 +2,15 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useSchedule, useZones } from '@/lib/hooks'
-import { Navigation } from '@/components/Navigation'
+import { Navigation } from '@/components/shared/Navigation'
 import { useSearchParams, useRouter } from 'next/navigation'
+import {
+  createHKTDate,
+  getHKTDateKey,
+  addDaysToHKTDateKey,
+  formatHKTDateKey,
+  compareHKTDateKeys,
+} from '@/lib/utils/timezone'
 
 export default function ReschedulePage() {
   const { zones } = useZones()
@@ -16,39 +23,26 @@ export default function ReschedulePage() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330' | ''>('')
   const [warning, setWarning] = useState<string>('')
 
-  // Get schedules that need rescheduling (MISSED or RESCHEDULED with past dates)
-  const { schedules: missedSchedules, mutate: mutateMissed } = useSchedule(undefined, undefined, undefined, 'MISSED')
+  // Track today's date as an HKT date key (YYYY-MM-DD) to avoid timezone drift
+  const todayKey = useMemo(() => getHKTDateKey(new Date()), [])
+
+  // Future window for slot lookup (30 days ahead)
+  const futureKey = useMemo(() => addDaysToHKTDateKey(todayKey, 30), [todayKey])
+
+  // Get schedules that need rescheduling (MISSED or SKIPPED)
+  const { schedules: missedSchedules, isLoading: isLoadingMissed, mutate: mutateMissed } = useSchedule(undefined, undefined, undefined, 'MISSED')
+  const { schedules: skippedSchedules, isLoading: isLoadingSkipped, mutate: mutateSkipped } = useSchedule(undefined, undefined, undefined, 'SKIPPED')
   
-  // Also get RESCHEDULED schedules with past dates
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const pastDate = new Date(today)
-  pastDate.setDate(pastDate.getDate() - 30)
-  const { schedules: rescheduledSchedules, mutate: mutateRescheduled } = useSchedule(
-    undefined,
-    pastDate.toISOString().split('T')[0],
-    today.toISOString().split('T')[0]
-  )
-  
-  // Combine and filter: MISSED + RESCHEDULED with past dates
+  // Combine MISSED and SKIPPED schedules
   const schedules = useMemo(() => {
-    const all = [...missedSchedules]
-    rescheduledSchedules.forEach((s: any) => {
-      if (s.status === 'RESCHEDULED') {
-        const scheduleDate = new Date(s.r1PlannedDate)
-        scheduleDate.setHours(0, 0, 0, 0)
-        if (scheduleDate < today && !all.find((a: any) => a.id === s.id)) {
-          all.push(s)
-        }
-      }
-    })
+    const all = [...missedSchedules, ...skippedSchedules]
     return all
-  }, [missedSchedules, rescheduledSchedules, today])
+  }, [missedSchedules, skippedSchedules])
   
-  const isLoading = false // We'll handle loading separately if needed
+  const isLoading = isLoadingMissed || isLoadingSkipped
   const mutate = () => {
     mutateMissed()
-    mutateRescheduled()
+    mutateSkipped()
   }
   
   // Auto-select schedule if scheduleId is in URL
@@ -61,75 +55,83 @@ export default function ReschedulePage() {
     }
   }, [scheduleIdFromUrl, schedules])
  
-  // Get all schedules for finding free slots (reuse today variable)
-  const futureDate = new Date(today)
-  futureDate.setDate(futureDate.getDate() + 30)
-  const { schedules: allSchedules } = useSchedule(
-    undefined,
-    today.toISOString().split('T')[0],
-    futureDate.toISOString().split('T')[0]
-  )
-
   const selectedSchedule = selectedScheduleId
     ? schedules.find((s: any) => s.id === selectedScheduleId)
     : null
 
-  // Find free slots before deadline
-  const freeSlots = useMemo(() => {
-    if (!selectedSchedule) return []
+  // Get schedules for the selected zone only - fixes zone filtering issue
+  // Only fetch schedules if we have a selected schedule (to get the zone)
+  const selectedZoneId = selectedSchedule?.zone?.id || selectedSchedule?.zoneId
+  const { schedules: allSchedules, isLoading: isLoadingAllSchedules } = useSchedule(
+    selectedZoneId || undefined, // Filter by zone - CRITICAL FIX
+    selectedSchedule ? todayKey : undefined,
+    selectedSchedule ? futureKey : undefined
+  )
 
-    const deadline = new Date(selectedSchedule.dueDate)
+  // Find free slots before deadline
+  // Only calculate if schedules are loaded (prevents showing all slots as available during loading)
+  const freeSlots = useMemo(() => {
+    if (!selectedSchedule || isLoadingAllSchedules) return []
+
+    const deadlineKey = getHKTDateKey(new Date(selectedSchedule.dueDate))
+    const selectedZoneId = selectedSchedule.zone?.id || selectedSchedule.zoneId
+    if (!selectedZoneId) return []
+
+    const schedulesInSameZone = allSchedules.filter((s: any) => {
+      const scheduleZoneId = s.zone?.id || s.zoneId
+      return (
+        scheduleZoneId === selectedZoneId &&
+        s.r1PlannedDate &&
+        s.id !== selectedSchedule.id
+      )
+    })
+
+    const occupiedSlotMap = new Map<string, any>()
+    schedulesInSameZone.forEach((s: any) => {
+      if (!s.r1PlannedDate) return
+      const scheduleKey = getHKTDateKey(new Date(s.r1PlannedDate))
+      occupiedSlotMap.set(`${scheduleKey}-${s.timeSlot}`, s)
+    })
+
     const slots: Array<{
-      date: Date
+      dateKey: string
       timeSlot: 'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330'
       label: string
       isOccupied: boolean
       occupiedSchedule?: any
     }> = []
 
-    const currentDate = new Date(today)
-    while (currentDate <= deadline) {
-      const dateKey = currentDate.toISOString().split('T')[0]
-      const timeSlots: Array<'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330'> = [
-        'SLOT_2300',
-        'SLOT_0130',
-        'SLOT_0330',
-      ]
+    const timeSlots: Array<'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330'> = [
+      'SLOT_2300',
+      'SLOT_0130',
+      'SLOT_0330',
+    ]
 
+    let currentKey = todayKey
+
+    while (compareHKTDateKeys(currentKey, deadlineKey) <= 0) {
       timeSlots.forEach((slot) => {
-        const occupied = allSchedules.some(
-          (s: any) =>
-            new Date(s.r1PlannedDate).toISOString().split('T')[0] === dateKey &&
-            s.timeSlot === slot &&
-            s.zoneId === selectedSchedule.zoneId
-        )
-
-        const occupiedSchedule = allSchedules.find(
-          (s: any) =>
-            new Date(s.r1PlannedDate).toISOString().split('T')[0] === dateKey &&
-            s.timeSlot === slot &&
-            s.zoneId === selectedSchedule.zoneId
-        )
-
+        const slotKey = `${currentKey}-${slot}`
+        const occupiedSchedule = occupiedSlotMap.get(slotKey)
         let label = ''
         if (slot === 'SLOT_2300') label = '23:00'
         else if (slot === 'SLOT_0130') label = '01:30'
         else if (slot === 'SLOT_0330') label = '03:30'
 
         slots.push({
-          date: new Date(currentDate),
+          dateKey: currentKey,
           timeSlot: slot,
           label,
-          isOccupied: !!occupied,
+          isOccupied: Boolean(occupiedSchedule),
           occupiedSchedule,
         })
       })
 
-      currentDate.setDate(currentDate.getDate() + 1)
+      currentKey = addDaysToHKTDateKey(currentKey, 1)
     }
 
     return slots
-  }, [selectedSchedule, allSchedules, today])
+  }, [selectedSchedule, allSchedules, todayKey, isLoadingAllSchedules])
 
   const handleReschedule = async () => {
     if (!selectedScheduleId || !selectedDate || !selectedTimeSlot) {
@@ -139,20 +141,35 @@ export default function ReschedulePage() {
 
     // Check if slot is occupied
     const slot = freeSlots.find(
-      (s) =>
-        s.date.toISOString().split('T')[0] === selectedDate &&
-        s.timeSlot === selectedTimeSlot
+      (s) => s.dateKey === selectedDate && s.timeSlot === selectedTimeSlot
     )
 
     if (slot?.isOccupied && slot.occupiedSchedule) {
-      const confirmSwap = confirm(
-        `This slot is already occupied by ${slot.occupiedSchedule.equipment.equipmentNumber}. Do you want to swap schedules?`
+      const confirmPush = confirm(
+        `This slot is already occupied by ${slot.occupiedSchedule.equipment.equipmentNumber}. They will be moved to the next available slot in this zone before their deadline. Do you want to continue?`
       )
-      if (!confirmSwap) return
+      if (!confirmPush) return
+    }
+
+    // Check for 23:00 slot eligibility - show warning but allow proceed
+    const selectedSchedule = schedules.find((s: any) => s.id === selectedScheduleId)
+    const isInvalid2300Slot = selectedTimeSlot === 'SLOT_2300' && selectedSchedule?.equipment?.canUse2300Slot !== true
+    let allowInvalid2300Slot = false
+
+    if (isInvalid2300Slot) {
+      const confirmed = confirm(
+        'Warning: This equipment is not eligible for the 23:00 slot. Only equipment with the clock icon can be scheduled at 23:00.\n\nDo you want to proceed anyway?'
+      )
+      if (!confirmed) {
+        return
+      }
+      allowInvalid2300Slot = true
     }
 
     try {
-      const targetDate = new Date(selectedDate)
+      // Parse selectedDate (format: YYYY-MM-DD) and create date in HKT
+      const [year, month, day] = selectedDate.split('-').map(Number)
+      
       let hour = 0
       let minute = 0
       if (selectedTimeSlot === 'SLOT_2300') {
@@ -165,7 +182,9 @@ export default function ReschedulePage() {
         hour = 3
         minute = 30
       }
-      targetDate.setHours(hour, minute, 0, 0)
+      
+      // Create date in HKT timezone to ensure consistent comparison
+      const targetDateHKT = createHKTDate(year, month, day, hour, minute)
 
       const response = await fetch(`/api/schedules/${selectedScheduleId}/move`, {
         method: 'POST',
@@ -173,9 +192,11 @@ export default function ReschedulePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          newDate: targetDate.toISOString(),
+          newDate: targetDateHKT.toISOString(),
           newTimeSlot: selectedTimeSlot,
           swapWithScheduleId: slot?.occupiedSchedule?.id || undefined,
+          allowInvalid2300Slot, // Allow move despite 23:00 warning
+          targetDateStr: selectedDate, // Send the date string directly for comparison
         }),
       })
 
@@ -194,9 +215,9 @@ export default function ReschedulePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="flex-1 overflow-auto p-4">
+      <main className="ml-64 overflow-auto p-4">
         <div className="max-w-full mx-auto">
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
@@ -227,7 +248,7 @@ export default function ReschedulePage() {
               ) : (
                 <div className="divide-y divide-gray-200">
                   {schedules.map((schedule: any) => {
-                    const scheduledDate = new Date(schedule.r1PlannedDate)
+                    const scheduledDate = schedule.r1PlannedDate ? new Date(schedule.r1PlannedDate) : null
                     const deadline = new Date(schedule.dueDate)
                     const timeSlot = schedule.timeSlot
                     let timeLabel = ''
@@ -262,7 +283,9 @@ export default function ReschedulePage() {
                               Zone: {schedule.zone.code}
                             </div>
                             <div className="text-sm text-gray-600">
-                              Scheduled: {scheduledDate.toLocaleDateString('en-US')} {timeLabel}
+                              {scheduledDate 
+                                ? `Scheduled: ${scheduledDate.toLocaleDateString('en-US')} ${timeLabel}`
+                                : 'No scheduled date (needs rescheduling)'}
                             </div>
                             <div className="text-sm text-orange-600 font-medium mt-1">
                               Deadline: {deadline.toLocaleDateString('en-US')}
@@ -289,152 +312,172 @@ export default function ReschedulePage() {
                   </p>
                 </div>
                 <div className="p-4 overflow-y-auto flex-1">
-                  {/* Selected slot indicator */}
-                  {selectedDate && selectedTimeSlot && (
-                    <div className="mb-4 p-3 bg-blue-100 border-2 border-blue-500 rounded-lg">
-                      <div className="text-sm font-semibold text-blue-900 mb-1">
-                        Selected Slot:
-                      </div>
-                      <div className="text-base font-bold text-blue-900">
-                        {new Date(selectedDate).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}{' '}
-                        at{' '}
-                        {selectedTimeSlot === 'SLOT_2300'
-                          ? '23:00'
-                          : selectedTimeSlot === 'SLOT_0130'
-                          ? '01:30'
-                          : '03:30'}
-                      </div>
+                  {isLoadingAllSchedules ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+                      <p className="text-sm">Loading schedules...</p>
+                      <p className="text-xs text-gray-400 mt-1">Please wait while we check slot availability</p>
                     </div>
-                  )}
-
-                  {warning && (
-                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                      {warning}
-                    </div>
-                  )}
-                  
-                  {/* Compact slot picker */}
-                  <div className="mb-2">
-                    <div className="text-xs font-semibold text-gray-700 mb-1.5">
-                      Select date and time:
-                    </div>
-                    {/* Column headers */}
-                    <div className="grid grid-cols-3 gap-1.5 mb-1">
-                      <div className="text-xs font-bold text-gray-900 text-center py-0.5">23:00</div>
-                      <div className="text-xs font-bold text-gray-900 text-center py-0.5">01:30</div>
-                      <div className="text-xs font-bold text-gray-900 text-center py-0.5">03:30</div>
-                    </div>
-                  </div>
-
-                  {/* Group slots by date - compact */}
-                  <div className="space-y-1.5">
-                    {Array.from(new Set(freeSlots.map(s => s.date.toISOString().split('T')[0])))
-                      .sort()
-                      .map((dateKey) => {
-                        const dateSlots = freeSlots.filter(
-                          (s) => s.date.toISOString().split('T')[0] === dateKey
-                        )
-                        const date = new Date(dateKey)
-                        const isToday = date.toISOString().split('T')[0] === new Date().toISOString().split('T')[0]
+                  ) : (
+                    <>
+                      {warning && (
+                        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                          {warning}
+                        </div>
+                      )}
+                      
+                      {/* Improved compact slot picker */}
+                      <div className="max-w-2xl">
+                        <div className="text-sm font-semibold text-gray-900 mb-3">
+                          Select date and time:
+                        </div>
                         
-                        return (
-                          <div key={dateKey} className="mb-1.5">
-                            <div className="text-xs font-semibold text-gray-900 mb-0.5 flex items-center gap-1.5">
-                              <span>
-                                {date.toLocaleDateString('en-US', {
-                                  weekday: 'short',
-                                  month: 'short',
-                                  day: 'numeric',
-                                })}
-                              </span>
-                              {isToday && (
-                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">
-                                  Today
-                                </span>
-                              )}
+                        {/* Table-style layout with dates as rows */}
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          {/* Header row with time slots */}
+                          <div className="grid grid-cols-[140px_repeat(3,1fr)] bg-gray-50 border-b border-gray-200">
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-700 border-r border-gray-200">
+                              Date
                             </div>
-                            <div className="grid grid-cols-3 gap-1.5">
-                              {dateSlots.map((slot, slotIndex) => {
-                                const isSelected =
-                                  selectedDate === dateKey && selectedTimeSlot === slot.timeSlot
-
-                                return (
-                                  <button
-                                    key={slotIndex}
-                                    onClick={() => {
-                                      setSelectedDate(dateKey)
-                                      setSelectedTimeSlot(slot.timeSlot)
-                                      if (slot.isOccupied) {
-                                        setWarning(
-                                          `Warning: This slot is occupied by ${slot.occupiedSchedule?.equipment.equipmentNumber}. Selecting it will swap schedules.`
-                                        )
-                                      } else {
-                                        setWarning('')
-                                      }
-                                    }}
-                                    className={`p-1.5 rounded text-xs text-center transition-all ${
-                                      slot.isOccupied
-                                        ? 'bg-yellow-50 border border-yellow-400 hover:bg-yellow-100'
-                                        : 'bg-green-50 border border-green-400 hover:bg-green-100'
-                                    } ${
-                                      isSelected
-                                        ? 'ring-2 ring-blue-500 bg-blue-100 border-blue-600 shadow-md'
-                                        : ''
-                                    }`}
-                                  >
-                                    <div className="font-bold text-sm text-gray-900">
-                                      {slot.label}
-                                    </div>
-                                    {slot.isOccupied && (
-                                      <div className="text-[10px] text-yellow-800 mt-0.5 font-medium">
-                                        Occupied
-                                      </div>
-                                    )}
-                                    {isSelected && (
-                                      <div className="text-[10px] text-blue-800 mt-0.5 font-bold">
-                                        ✓
-                                      </div>
-                                    )}
-                                  </button>
-                                )
-                              })}
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-700 text-center border-r border-gray-200">
+                              23:00
+                            </div>
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-700 text-center border-r border-gray-200">
+                              01:30
+                            </div>
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-700 text-center">
+                              03:30
                             </div>
                           </div>
-                        )
-                      })}
-                  </div>
+
+                          {/* Date rows with slots */}
+                          <div className="divide-y divide-gray-200">
+                            {Array.from(new Set(freeSlots.map((s) => s.dateKey)))
+                              .sort()
+                              .map((dateKey) => {
+                                const dateSlots = freeSlots.filter(
+                                  (s) => s.dateKey === dateKey
+                                )
+                                const isToday = dateKey === todayKey
+                                
+                                // Get slots in order: 23:00, 01:30, 03:30
+                                const slot2300 = dateSlots.find(s => s.timeSlot === 'SLOT_2300')
+                                const slot0130 = dateSlots.find(s => s.timeSlot === 'SLOT_0130')
+                                const slot0330 = dateSlots.find(s => s.timeSlot === 'SLOT_0330')
+
+                                return (
+                                  <div key={dateKey} className="grid grid-cols-[140px_repeat(3,1fr)] hover:bg-gray-50 transition-colors">
+                                    {/* Date column */}
+                                    <div className="px-3 py-1.5 border-r border-gray-200 flex items-center min-h-[56px]">
+                                      <div className="flex flex-col">
+                                        <span className={`text-sm font-semibold leading-tight ${
+                                          isToday ? 'text-blue-600' : 'text-gray-900'
+                                        }`}>
+                                          {formatHKTDateKey(dateKey, {
+                                            weekday: 'short',
+                                            month: 'short',
+                                            day: 'numeric',
+                                          })}
+                                        </span>
+                                        {isToday && (
+                                          <span className="text-[10px] text-blue-600 font-medium mt-0.5 leading-tight">
+                                            Today
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Time slot columns */}
+                                    {[slot2300, slot0130, slot0330].map((slot, index) => {
+                                      if (!slot) return null
+                                      
+                                      const isSelected =
+                                        selectedDate === dateKey &&
+                                        selectedTimeSlot === slot.timeSlot
+
+                                      return (
+                                        <div
+                                          key={index}
+                                          className="px-1.5 py-1.5 border-r border-gray-200 last:border-r-0 flex items-center justify-center"
+                                        >
+                                          <button
+                                            onClick={() => {
+                                              setSelectedDate(dateKey)
+                                              setSelectedTimeSlot(slot.timeSlot)
+                                              if (slot.isOccupied) {
+                                                setWarning(
+                                                  `This slot is occupied by ${slot.occupiedSchedule?.equipment.equipmentNumber}. Selecting it will push that work order to the next available slot.`
+                                                )
+                                              } else {
+                                                setWarning('')
+                                              }
+                                            }}
+                                            className={`w-full h-14 rounded-md text-xs font-medium transition-all flex flex-col items-center justify-center gap-0.5 ${
+                                              slot.isOccupied
+                                                ? 'bg-yellow-50 border-2 border-yellow-400 hover:bg-yellow-100 hover:border-yellow-500'
+                                                : 'bg-green-50 border-2 border-green-400 hover:bg-green-100 hover:border-green-500'
+                                            } ${
+                                              isSelected
+                                                ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-100 border-blue-600 shadow-sm'
+                                                : ''
+                                            }`}
+                                          >
+                                            {slot.isOccupied ? (
+                                              <>
+                                                <span className="text-yellow-800 font-semibold text-[10px] leading-tight">Occupied</span>
+                                                <span className="text-yellow-700 font-bold text-[11px] leading-tight">
+                                                  {slot.occupiedSchedule?.equipment.equipmentNumber || 'Unknown'}
+                                                </span>
+                                              </>
+                                            ) : (
+                                              <span className={`font-semibold text-xs ${
+                                                isSelected ? 'text-blue-800' : 'text-green-800'
+                                              }`}>
+                                                {isSelected ? '✓ Selected' : 'Available'}
+                                              </span>
+                                            )}
+                                          </button>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )
+                              })}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 
                 {/* Fixed footer with rescheduling info and buttons */}
                 <div className="px-4 py-4 border-t border-gray-200 bg-white flex-shrink-0">
-                  {selectedDate && selectedTimeSlot ? (
-                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-300">
-                      <div className="text-sm text-gray-600 mb-2">Rescheduling to:</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {new Date(selectedDate).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}{' '}
-                        at{' '}
-                        {selectedTimeSlot === 'SLOT_2300'
-                          ? '23:00'
-                          : selectedTimeSlot === 'SLOT_0130'
-                          ? '01:30'
-                          : '03:30'}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="text-sm text-gray-500 italic">
-                        Please select a date and time slot above
-                      </div>
+                  <div className="mb-2 text-sm text-blue-700">
+                    {selectedDate && selectedTimeSlot ? (
+                      <>
+                        Rescheduling to{' '}
+                        <span className="font-semibold">
+                          {formatHKTDateKey(selectedDate, {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}{' '}
+                          at{' '}
+                          {selectedTimeSlot === 'SLOT_2300'
+                            ? '23:00'
+                            : selectedTimeSlot === 'SLOT_0130'
+                            ? '01:30'
+                            : '03:30'}
+                        </span>
+                      </>
+                    ) : (
+                      'Please select a date and time slot above.'
+                    )}
+                  </div>
+                  {warning && (
+                    <div className="mb-3 text-xs text-blue-600">
+                      {warning}
                     </div>
                   )}
                   <div className="flex gap-2">

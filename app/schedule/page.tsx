@@ -2,9 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { useSchedule, useZones } from '@/lib/hooks'
-import { ScheduleCalendar } from '@/components/ScheduleCalendar'
-import { ZoneFilter } from '@/components/ZoneFilter'
-import { Navigation } from '@/components/Navigation'
+import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
+import { Navigation } from '@/components/shared/Navigation'
 
 type ViewMode = 'week' | 'month'
 
@@ -12,6 +11,7 @@ export default function SchedulePage() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('week')
   const [dateOffset, setDateOffset] = useState(0) // Offset in weeks or months
+  const [isEditMode, setIsEditMode] = useState(false)
 
   const { zones } = useZones()
 
@@ -102,9 +102,9 @@ export default function SchedulePage() {
     : zones
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="flex-1 overflow-auto p-4">
+      <main className="ml-64 overflow-auto p-4">
         <div className="max-w-full mx-auto">
         {/* Header */}
         <div className="mb-4">
@@ -117,10 +117,19 @@ export default function SchedulePage() {
         <div className="bg-white rounded-lg shadow-sm p-3 mb-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <ZoneFilter
-                selectedZoneId={selectedZoneId}
-                onZoneChange={setSelectedZoneId}
-              />
+              {/* Zone Filter */}
+              <select
+                value={selectedZoneId || ''}
+                onChange={(e) => setSelectedZoneId(e.target.value || null)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Zones</option>
+                {zones.map((zone: any) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.code} - {zone.name}
+                  </option>
+                ))}
+              </select>
               
               {/* View Mode Toggle */}
               <div className="flex items-center gap-2 border border-gray-300 rounded-md">
@@ -181,8 +190,16 @@ export default function SchedulePage() {
           </div>
 
           {/* Date Range Display */}
-          <div className="mt-3 text-sm text-gray-900 font-medium">
-            {displayRange}
+          <div className="mt-3 flex items-center justify-between">
+            <div className="text-sm text-gray-900 font-medium">
+              {displayRange}
+            </div>
+            <button
+              onClick={() => setIsEditMode(!isEditMode)}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              {isEditMode ? 'Done Editing' : 'Edit'}
+            </button>
           </div>
         </div>
 
@@ -202,6 +219,7 @@ export default function SchedulePage() {
                 fromDate={fromDate}
                 toDate={toDate}
                 viewMode={viewMode}
+                isEditMode={isEditMode}
                 onScheduleMove={() => {
                   // Refresh schedules
                   mutate()

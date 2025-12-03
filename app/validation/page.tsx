@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import { useSchedule } from '@/lib/hooks'
-import { Navigation } from '@/components/Navigation'
+import { Navigation } from '@/components/shared/Navigation'
 
 export default function ValidationPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'completed' | 'to_reschedule' | null>(null)
   const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
   // Show all past services that haven't been actioned
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -22,24 +23,25 @@ export default function ValidationPage() {
   const { schedules, isLoading, mutate } = useSchedule(undefined, from, to)
 
   // Filter schedules that need validation:
-  // - Past dates (before today)
-  // - Status is PLANNED, IN_PROGRESS, or RESCHEDULED (not COMPLETED or MISSED)
+  // - Status is PENDING (past dates awaiting validation)
+  // - OR status is PLANNED with past r1PlannedDate (not yet transitioned by CRON)
   const pendingSchedules = useMemo(() => {
     return schedules.filter((schedule: any) => {
-      const scheduleDate = new Date(schedule.r1PlannedDate)
-      scheduleDate.setHours(0, 0, 0, 0)
-      
-      const isPastDate = scheduleDate < today
-      const needsValidation = 
-        schedule.status === 'PLANNED' ||
-        schedule.status === 'IN_PROGRESS' ||
-        schedule.status === 'RESCHEDULED'
-      
-      return isPastDate && needsValidation
+      if (schedule.status === 'PENDING') {
+        return true
+      }
+      // Also show PLANNED items with past dates (CRON hasn't run yet)
+      if (schedule.status === 'PLANNED' && schedule.r1PlannedDate) {
+        const scheduleDate = new Date(schedule.r1PlannedDate)
+        scheduleDate.setHours(0, 0, 0, 0)
+        return scheduleDate < today
+      }
+      return false
     })
   }, [schedules, today])
 
   const handleValidate = async (scheduleId: string, action: 'completed' | 'to_reschedule') => {
+    setProcessingIds(prev => new Set(prev).add(scheduleId))
     try {
       const response = await fetch(`/api/schedules/${scheduleId}/validate`, {
         method: 'POST',
@@ -51,15 +53,35 @@ export default function ValidationPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        alert(`Error: ${error.error || 'Failed to validate schedule'}`)
         return
       }
 
+      const result = await response.json()
+      
+      // Show success feedback before refresh
+      if (action === 'to_reschedule') {
+        const status = result.schedule?.status
+        if (status === 'SKIPPED') {
+          alert('Item marked as SKIPPED. You can find it in the "To be rescheduled" tab on the Work Order Tracking page.')
+        } else if (status === 'MISSED') {
+          alert('Item marked as MISSED. The deadline has passed. You can find it in the "To be rescheduled" tab on the Work Order Tracking page.')
+        }
+      } else if (action === 'completed') {
+        alert('Item marked as COMPLETED.')
+      }
+      
       // Refresh schedules
-      mutate()
+      await mutate()
     } catch (error) {
       console.error('Error validating schedule:', error)
-      alert('Failed to validate schedule. Please try again.')
+      alert(`Failed to validate schedule: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev)
+        next.delete(scheduleId)
+        return next
+      })
     }
   }
 
@@ -121,9 +143,9 @@ export default function ValidationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="flex-1 overflow-auto p-4">
+      <main className="ml-64 overflow-auto p-4">
         <div className="max-w-full mx-auto">
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
@@ -285,15 +307,17 @@ export default function ValidationPage() {
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleValidate(schedule.id, 'completed')}
-                                className="px-3 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700"
+                                disabled={processingIds.has(schedule.id)}
+                                className="px-3 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                               >
-                                Completed
+                                {processingIds.has(schedule.id) ? 'Processing...' : 'Completed'}
                               </button>
                               <button
                                 onClick={() => handleValidate(schedule.id, 'to_reschedule')}
-                                className="px-3 py-1 text-xs font-medium text-white bg-orange-600 rounded hover:bg-orange-700"
+                                disabled={processingIds.has(schedule.id)}
+                                className="px-3 py-1 text-xs font-medium text-white bg-orange-600 rounded hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                               >
-                                To Reschedule
+                                {processingIds.has(schedule.id) ? 'Processing...' : 'To Reschedule'}
                               </button>
                             </div>
                           </td>

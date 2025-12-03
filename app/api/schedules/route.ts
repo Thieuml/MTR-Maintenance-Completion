@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
 
     const { zoneId, equipmentId, from, to, status, batch } = validation.data
 
+    // Check if visits should be included (default: true for backward compatibility)
+    const includeVisits = searchParams.get('includeVisits') !== 'false'
+
     // Build where clause
     const where: any = {}
 
@@ -43,17 +46,38 @@ export async function GET(request: NextRequest) {
       where.equipmentId = equipmentId
     }
 
-    if (from || to) {
-      where.r1PlannedDate = {}
+    // Only filter by r1PlannedDate if dates are provided AND status is not SKIPPED/MISSED
+    // SKIPPED/MISSED items have null r1PlannedDate, so date filtering would exclude them
+    if ((from || to) && status !== 'SKIPPED' && status !== 'MISSED') {
+      const dateFilters: any[] = []
+
+      const plannedDateFilter: any = {}
       if (from) {
-        // Parse date string (YYYY-MM-DD) and create start of day in UTC
-        const fromDate = new Date(from + 'T00:00:00Z')
-        where.r1PlannedDate.gte = fromDate
+        plannedDateFilter.gte = new Date(from + 'T00:00:00Z')
       }
       if (to) {
-        // Parse date string (YYYY-MM-DD) and create end of day in UTC
-        const toDate = new Date(to + 'T23:59:59.999Z')
-        where.r1PlannedDate.lte = toDate
+        plannedDateFilter.lte = new Date(to + 'T23:59:59.999Z')
+      }
+      if (Object.keys(plannedDateFilter).length > 0) {
+        dateFilters.push({ r1PlannedDate: plannedDateFilter })
+      }
+
+      const skippedDateFilter: any = { status: 'SKIPPED' }
+      const skippedRange: any = {}
+      if (from) {
+        skippedRange.gte = new Date(from + 'T00:00:00Z')
+      }
+      if (to) {
+        skippedRange.lte = new Date(to + 'T23:59:59.999Z')
+      }
+      if (Object.keys(skippedRange).length > 0) {
+        skippedDateFilter.lastSkippedDate = skippedRange
+        dateFilters.push(skippedDateFilter)
+      }
+
+      if (dateFilters.length > 0) {
+        where.AND = where.AND || []
+        where.AND.push({ OR: dateFilters })
       }
     }
 
@@ -77,6 +101,8 @@ export async function GET(request: NextRequest) {
         timeSlot: true,
         status: true,
         workOrderNumber: true,
+        lastSkippedDate: true,
+        skippedCount: true,
         equipment: {
           select: {
             id: true,
@@ -108,18 +134,20 @@ export async function GET(request: NextRequest) {
             name: true,
           },
         },
-        visits: {
-          select: {
-            id: true,
-            actualStartDate: true,
-            completed: true,
-            classification: true,
+        ...(includeVisits ? {
+          visits: {
+            select: {
+              id: true,
+              actualStartDate: true,
+              completed: true,
+              classification: true,
+            },
+            orderBy: {
+              actualStartDate: 'desc',
+            },
+            take: 1, // Most recent visit
           },
-          orderBy: {
-            actualStartDate: 'desc',
-          },
-          take: 1, // Most recent visit
-        },
+        } : {}),
       },
       orderBy: {
         r1PlannedDate: 'asc',

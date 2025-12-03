@@ -10,6 +10,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// NextAuth.js models for authentication
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
 // MTR Zones (MTR-01 to MTR-06)
 model Zone {
   id                  String                   @id @default(cuid())
@@ -95,7 +148,7 @@ model Schedule {
   r0PlannedDate DateTime // Original committed date (locked in MTR system)
 
   // R1 Schedule (WM's proposed updated schedule)
-  r1PlannedDate DateTime // Proposed new schedule date
+  r1PlannedDate DateTime? // Proposed new schedule date (nullable for SKIPPED/MISSED items)
 
   // Due Date (R0 + 14 days - latest completion date)
   dueDate DateTime // R0PlannedDate + 14 days
@@ -119,6 +172,16 @@ model Schedule {
   // Status tracking
   status ScheduleStatus @default(PLANNED)
 
+  // Late completion flag
+  isLate Boolean @default(false) // true if completionDate > mtrPlannedStartDate + 6 days (for COMPLETED)
+  // or if r1PlannedDate > mtrPlannedStartDate + 6 days (for PLANNED)
+
+  // Last skipped date
+  lastSkippedDate DateTime? // Last date when item was skipped/rescheduled
+
+  // Skipped count
+  skippedCount Int @default(0) // Number of times item has been rescheduled
+
   // Execution tracking
   visits      MaintenanceVisit[]
   reschedules Reschedule[]
@@ -130,6 +193,8 @@ model Schedule {
   @@index([zoneId, r1PlannedDate])
   @@index([r1PlannedDate])
   @@index([dueDate])
+  @@index([status, updatedAt]) // Optimize queries filtering by status and date
+  @@index([workOrderNumber, status]) // Optimize work order queries
 }
 
 enum ScheduleBatch {
@@ -145,13 +210,12 @@ enum TimeSlot {
 
 enum ScheduleStatus {
   PLANNED // Scheduled but not started
-  IN_PROGRESS // Maintenance in progress
-  COMPLETED // Completed on committed date
-  COMPLETED_LATE // Completed but missed committed date (within tolerance)
-  MISSED // Missed committed date, needs rescheduling
-  RESCHEDULED // Explicitly rescheduled
-  OVERDUE // Past due date (14 days expired)
-  CANCELLED // Cancelled
+  PENDING // Past scheduled date, awaiting validation
+  COMPLETED // Completed (use isLate flag for late completion)
+  SKIPPED // Skipped, needs rescheduling (dueDate still in future)
+  MISSED // Missed deadline (dueDate passed) - FINAL STATUS
+  CANCELLED // Cancelled/deleted
+  // Deprecated (kept for migration): IN_PROGRESS, COMPLETED_LATE, RESCHEDULED, TO_RESCHEDULE, OVERDUE
 }
 
 // Maintenance Visit (actual execution)

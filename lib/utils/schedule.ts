@@ -78,3 +78,43 @@ export async function canUse2300Slot(equipmentId: string): Promise<boolean> {
   return equipment?.canUse2300Slot || false
 }
 
+/**
+ * Check if a schedule is "At Risk" of not being completed on time
+ * Criteria: r1PlannedDate >= dueDate - 5 days
+ * Only applies to PLANNED items (not SKIPPED/MISSED/COMPLETED)
+ * 
+ * @param r1PlannedDate - The scheduled date (r1PlannedDate)
+ * @param dueDate - The due date (deadline)
+ * @param status - The schedule status
+ * @returns true if the schedule is at risk
+ */
+export function isAtRisk(
+  r1PlannedDate: Date | string | null,
+  dueDate: Date | string | null,
+  status: string
+): boolean {
+  // Only PLANNED items can be at risk
+  if (status !== 'PLANNED') {
+    return false
+  }
+
+  // Need both dates to calculate
+  if (!r1PlannedDate || !dueDate) {
+    return false
+  }
+
+  const scheduleDate = typeof r1PlannedDate === 'string' ? new Date(r1PlannedDate) : r1PlannedDate
+  const deadline = typeof dueDate === 'string' ? new Date(dueDate) : dueDate
+
+  // Normalize to midnight for date comparison
+  scheduleDate.setHours(0, 0, 0, 0)
+  deadline.setHours(0, 0, 0, 0)
+
+  // Calculate dueDate - 5 days
+  const riskThreshold = new Date(deadline)
+  riskThreshold.setDate(riskThreshold.getDate() - 5)
+
+  // At risk if scheduleDate >= dueDate - 5 days
+  return scheduleDate >= riskThreshold
+}
+

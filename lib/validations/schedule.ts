@@ -10,12 +10,10 @@ export const timeSlotSchema = z.enum(['SLOT_2300', 'SLOT_0130', 'SLOT_0330'])
 
 export const scheduleStatusSchema = z.enum([
   'PLANNED',
-  'IN_PROGRESS',
+  'PENDING',
   'COMPLETED',
-  'COMPLETED_LATE',
+  'SKIPPED',
   'MISSED',
-  'RESCHEDULED',
-  'OVERDUE',
   'CANCELLED',
 ])
 

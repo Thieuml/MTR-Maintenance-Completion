@@ -8,11 +8,25 @@
  * @param date - Date to convert (defaults to now)
  * @returns Date in HKT timezone
  */
+const HKT_TIMEZONE = 'Asia/Hong_Kong'
+const HKT_OFFSET = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
+
+const hktDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: HKT_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+/**
+ * Convert a date to HKT (Hong Kong Time)
+ * NOTE: Returns a new Date shifted by the timezone offset. Use for calculations only,
+ * prefer getHKTDateKey/formatHKTDateKey for display to avoid double shifting.
+ */
 export function toHKT(date: Date = new Date()): Date {
   // HKT is UTC+8
-  const hktOffset = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
   const utcTime = date.getTime()
-  const hktTime = utcTime + hktOffset
+  const hktTime = utcTime + HKT_OFFSET
   return new Date(hktTime)
 }
 
@@ -68,14 +82,65 @@ export function createHKTDate(
   
   // Parse as if it's UTC, then adjust for HKT offset
   const utcDate = new Date(dateStr + 'Z')
-  const hktOffset = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
-  return new Date(utcDate.getTime() - hktOffset)
+  return new Date(utcDate.getTime() - HKT_OFFSET)
 }
 
 /**
  * Get HKT timezone string
  */
 export function getHKTTimezone(): string {
-  return 'Asia/Hong_Kong'
+  return HKT_TIMEZONE
+}
+
+/**
+ * Get YYYY-MM-DD key for a date in HKT
+ */
+export function getHKTDateKey(date: Date): string {
+  return hktDateFormatter.format(date)
+}
+
+/**
+ * Parse a YYYY-MM-DD key (HKT) back to a Date at midnight HKT
+ */
+export function parseHKTDateKey(key: string): Date {
+  return new Date(`${key}T00:00:00+08:00`)
+}
+
+/**
+ * Add days to an HKT date key
+ */
+export function addDaysToHKTDateKey(key: string, days: number): string {
+  const date = parseHKTDateKey(key)
+  date.setUTCDate(date.getUTCDate() + days)
+  return getHKTDateKey(date)
+}
+
+/**
+ * Format an HKT date key for display using Intl formatter
+ */
+export function formatHKTDateKey(
+  key: string,
+  options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }
+): string {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: HKT_TIMEZONE,
+    ...options,
+  })
+  return formatter.format(parseHKTDateKey(key))
+}
+
+/**
+ * Compare two HKT date keys (YYYY-MM-DD lexicographical compare)
+ */
+export function compareHKTDateKeys(a: string, b: string): number {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
+
+/**
+ * Get today's HKT date key
+ */
+export function getHKTTodayKey(): string {
+  return getHKTDateKey(new Date())
 }
 

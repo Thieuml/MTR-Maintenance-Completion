@@ -3,27 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const createMappingSchema = z.object({
-  equipmentId: z.string(),
-  zoneId: z.string(),
+  equipmentId: z.string().min(1),
+  zoneId: z.string().min(1),
   batch: z.enum(['A', 'B']),
 })
 
 /**
  * GET /api/admin/equipment-mapping
- * List all equipment mappings
+ * Get all equipment zone mappings
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const searchParams = request.nextUrl.searchParams
-    const zoneId = searchParams.get('zoneId')
-    const batch = searchParams.get('batch')
-
-    const where: any = { active: true }
-    if (zoneId) where.zoneId = zoneId
-    if (batch) where.batch = batch
-
     const mappings = await prisma.equipmentZoneMapping.findMany({
-      where,
       include: {
         equipment: {
           select: {
@@ -31,7 +22,6 @@ export async function GET(request: NextRequest) {
             equipmentNumber: true,
             name: true,
             type: true,
-            canUse2300Slot: true,
           },
         },
         zone: {
@@ -43,9 +33,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        equipment: {
-          equipmentNumber: 'asc',
-        },
+        updatedAt: 'desc',
       },
     })
 
@@ -61,7 +49,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/admin/equipment-mapping
- * Create or update equipment mapping
+ * Create or update equipment zone mapping
  */
 export async function POST(request: NextRequest) {
   try {
@@ -77,32 +65,46 @@ export async function POST(request: NextRequest) {
 
     const { equipmentId, zoneId, batch } = validation.data
 
-    // Check if equipment exists
-    const equipment = await prisma.equipment.findUnique({
-      where: { id: equipmentId },
+    // Check if mapping already exists
+    const existing = await prisma.equipmentZoneMapping.findUnique({
+      where: { equipmentId },
     })
 
-    if (!equipment) {
-      return NextResponse.json(
-        { error: 'Equipment not found' },
-        { status: 404 }
-      )
+    if (existing) {
+      // Update existing mapping
+      const updated = await prisma.equipmentZoneMapping.update({
+        where: { id: existing.id },
+        data: {
+          zoneId,
+          batch,
+        },
+        include: {
+          equipment: {
+            select: {
+              id: true,
+              equipmentNumber: true,
+              name: true,
+              type: true,
+            },
+          },
+          zone: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          },
+        },
+      })
+      return NextResponse.json({ mapping: updated })
     }
 
-    // Create or update mapping
-    const mapping = await prisma.equipmentZoneMapping.upsert({
-      where: { equipmentId },
-      update: {
-        zoneId,
-        batch,
-        active: true,
-        updatedAt: new Date(),
-      },
-      create: {
+    // Create new mapping
+    const mapping = await prisma.equipmentZoneMapping.create({
+      data: {
         equipmentId,
         zoneId,
         batch,
-        active: true,
       },
       include: {
         equipment: {
@@ -111,7 +113,6 @@ export async function POST(request: NextRequest) {
             equipmentNumber: true,
             name: true,
             type: true,
-            canUse2300Slot: true,
           },
         },
         zone: {
@@ -133,5 +134,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
 
