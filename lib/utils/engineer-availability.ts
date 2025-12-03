@@ -149,6 +149,7 @@ export async function getEngineerWorkload(
   // Group by date
   const byDate = new Map<string, number>()
   schedules.forEach(schedule => {
+    if (!schedule.r1PlannedDate) return
     const dateKey = schedule.r1PlannedDate.toISOString().split('T')[0]
     byDate.set(dateKey, (byDate.get(dateKey) || 0) + 1)
   })
