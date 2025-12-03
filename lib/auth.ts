@@ -34,8 +34,9 @@ export const authOptions: NextAuthOptions = {
     error: '/auth/error',
   },
   session: {
-    strategy: 'jwt',
+    strategy: 'database', // Use database strategy with PrismaAdapter
     maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // Update session every 24 hours
   },
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -48,22 +49,13 @@ export const authOptions: NextAuthOptions = {
       }
       return true
     },
-    async jwt({ token, user, account, profile }) {
-      // Initial sign in
-      if (user) {
-        token.id = user.id
-        token.email = user.email
-        token.name = user.name
-        token.picture = user.image
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        session.user.email = token.email as string
-        session.user.name = token.name as string
-        session.user.image = token.picture as string
+    async session({ session, user }) {
+      // With database strategy, user is available directly
+      if (session.user && user) {
+        session.user.id = user.id
+        session.user.email = user.email || null
+        session.user.name = user.name || null
+        session.user.image = user.image || null
       }
       return session
     },
