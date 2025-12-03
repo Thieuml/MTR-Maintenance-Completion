@@ -1,8 +1,6 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, Suspense } from 'react'
 import { Navigation } from '@/components/shared/Navigation'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
@@ -35,7 +33,7 @@ interface WorkOrder {
   // visits removed - not fetched for performance
 }
 
-export default function WorkOrderTrackingPage() {
+function WorkOrderTrackingPageContent() {
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get('tab') as 'to_validate' | 'to_reschedule' | 'completed' | 'at_risk' | null
   
@@ -683,6 +681,14 @@ export default function WorkOrderTrackingPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function WorkOrderTrackingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
+      <WorkOrderTrackingPageContent />
+    </Suspense>
   )
 }
 

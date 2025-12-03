@@ -1,8 +1,6 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSchedule, useZones } from '@/lib/hooks'
 import { Navigation } from '@/components/shared/Navigation'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -14,7 +12,7 @@ import {
   compareHKTDateKeys,
 } from '@/lib/utils/timezone'
 
-export default function ReschedulePage() {
+function ReschedulePageContent() {
   const { zones } = useZones()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -517,6 +515,14 @@ export default function ReschedulePage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ReschedulePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
+      <ReschedulePageContent />
+    </Suspense>
   )
 }
 

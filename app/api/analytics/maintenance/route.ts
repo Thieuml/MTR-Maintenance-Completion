@@ -7,6 +7,8 @@ import {
   type MaintenanceClassification,
 } from '@/lib/analytics/classification'
 
+export const dynamic = 'force-dynamic'
+
 interface AnalyticsQuery {
   from?: string
   to?: string
