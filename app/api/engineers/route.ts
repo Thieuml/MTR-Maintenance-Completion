@@ -148,9 +148,9 @@ export async function GET(request: NextRequest) {
           ? (recentLateVisits.length / recentVisits.length) * 100
           : 0
 
-      // Count overdue units
+      // Count missed units (previously OVERDUE)
       const overdueSchedules = allSchedules.filter(
-        (s) => s.status === 'OVERDUE'
+        (s) => s.status === 'MISSED'
       ).length
 
       return {
