@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useMemo, useEffect } from 'react'
 import { useSchedule, useZones } from '@/lib/hooks'
 import { Navigation } from '@/components/shared/Navigation'

@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Navigation } from '@/components/shared/Navigation'
 import { useSearchParams } from 'next/navigation'

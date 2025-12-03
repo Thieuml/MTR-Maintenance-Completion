@@ -4,6 +4,8 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Navigation } from '@/components/shared/Navigation'
 
+export const dynamic = 'force-dynamic'
+
 const errorMessages: Record<string, string> = {
   Configuration: 'There is a problem with the server configuration.',
   AccessDenied: 'You do not have permission to sign in.',
