@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
               classification = 'OVERDUE'
             }
           }
+        }
 
         // Check if visit already exists (by equipment and completion date)
         const existingVisit = await prisma.maintenanceVisit.findFirst({

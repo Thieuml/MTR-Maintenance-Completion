@@ -881,7 +881,7 @@ function DailyReport({
   }
   
   const getPlanningDeviation = (wo: WorkOrder) => {
-    if (!wo.mtrPlannedStartDate) return null
+    if (!wo.mtrPlannedStartDate || !wo.r1PlannedDate) return null
     return calculatePlanningDeviation(
       new Date(wo.r1PlannedDate),
       new Date(wo.mtrPlannedStartDate)
