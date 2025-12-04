@@ -48,9 +48,71 @@ export async function POST(request: NextRequest) {
     // Read file content
     const text = await file.text()
     
-    // Parse CSV manually (simple CSV parser)
-    const lines = text.split('\n').filter(line => line.trim())
-    if (lines.length < 2) {
+    // Parse CSV manually handling multi-line quoted fields
+    // First, split by newlines but preserve them for multi-line field reconstruction
+    const rawLines = text.split(/\r?\n/)
+    
+    // Reconstruct lines handling multi-line quoted fields
+    // When a field is quoted and contains newlines, the CSV standard allows the newline
+    // to be part of the field value. We need to reconstruct these properly.
+    const lines: string[] = []
+    let currentLine = ''
+    let inQuotes = false
+    
+    for (let lineIdx = 0; lineIdx < rawLines.length; lineIdx++) {
+      const rawLine = rawLines[lineIdx]
+      
+      // Track quote state: count unescaped quotes
+      let quoteCount = 0
+      let escaped = false
+      for (let i = 0; i < rawLine.length; i++) {
+        if (rawLine[i] === '\\' && !escaped) {
+          escaped = true
+          continue
+        }
+        if (rawLine[i] === '"' && !escaped) {
+          quoteCount++
+        }
+        escaped = false
+      }
+      
+      // If we're already in quotes, this line continues the previous field
+      if (inQuotes) {
+        currentLine += '\n' + rawLine
+        // If we have an odd number of quotes, we've closed the quoted field
+        if (quoteCount % 2 === 1) {
+          inQuotes = false
+        }
+      } else {
+        // Check if this line starts a quoted field that's not closed
+        // A line that starts with a quote and has an odd number of quotes
+        // means the quoted field continues on the next line
+        const startsWithQuote = rawLine.trim().startsWith('"')
+        const hasUnclosedQuote = quoteCount % 2 === 1
+        
+        if (startsWithQuote && hasUnclosedQuote) {
+          // This starts a multi-line quoted field
+          currentLine = rawLine
+          inQuotes = true
+        } else {
+          // This is a complete line (or continuation of previous)
+          if (currentLine) {
+            lines.push(currentLine)
+          }
+          currentLine = rawLine
+        }
+      }
+    }
+    
+    // Add the last line if any
+    if (currentLine) {
+      lines.push(currentLine)
+    }
+    
+    // Filter out empty lines
+    const nonEmptyLines = lines.filter(line => line.trim())
+    
+    if (nonEmptyLines.length < 2) {
       return NextResponse.json(
         { 
           success: false,
@@ -72,8 +134,15 @@ export async function POST(request: NextRequest) {
       
       for (let i = 0; i < line.length; i++) {
         const char = line[i]
+        // Handle escaped quotes (but CSV standard typically uses "" for escaped quotes, not \")
         if (char === '"') {
-          inQuotes = !inQuotes
+          // Check if this is an escaped quote (two quotes in a row)
+          if (i + 1 < line.length && line[i + 1] === '"' && inQuotes) {
+            current += '"'
+            i++ // Skip the next quote
+          } else {
+            inQuotes = !inQuotes
+          }
         } else if (char === ',' && !inQuotes) {
           result.push(current.trim())
           current = ''
@@ -85,21 +154,57 @@ export async function POST(request: NextRequest) {
       return result
     }
 
-    // Skip empty header rows (some CSVs have metadata rows)
-    // Look for the header row that contains both "Equipment" and "WO Number"
+    // Find the header row (look for line containing both "Equipment" and "WO Number")
+    // The header might span multiple lines, so we need to check if we need to combine lines
     let headerLineIndex = 0
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
-      const parsed = parseCSVLine(lines[i])
-      const lineLower = parsed.join(' ').toLowerCase()
+    let headerLineCount = 1
+    
+    for (let i = 0; i < Math.min(5, nonEmptyLines.length); i++) {
+      // Try parsing this line and the next few lines to see if header spans multiple
+      let combinedHeader = nonEmptyLines[i]
+      let j = i + 1
+      
+      // Check if this line contains header keywords
+      const lineLower = combinedHeader.toLowerCase()
       if (lineLower.includes('equipment') && lineLower.includes('wo number')) {
         headerLineIndex = i
+        
+        // Check if header continues on next lines (common when CSV exports wrap headers)
+        // Look ahead up to 3 more lines to see if they're part of the header
+        while (j < Math.min(i + 4, nonEmptyLines.length)) {
+          const nextLine = nonEmptyLines[j]
+          const nextLineLower = nextLine.toLowerCase()
+          
+          // If next line looks like data (starts with equipment pattern), stop
+          if (nextLine.match(/^[A-Z]{3,4}-[A-Z0-9]+/i)) {
+            break
+          }
+          
+          // If next line has header-like keywords but no data, it might be header continuation
+          const hasHeaderKeywords = nextLineLower.includes('date') || 
+                                   nextLineLower.includes('format') || 
+                                   nextLineLower.includes('completion') ||
+                                   nextLineLower.includes('deviation') ||
+                                   nextLineLower.includes('week') ||
+                                   nextLineLower.includes('team') ||
+                                   nextLineLower.includes('remarks') ||
+                                   nextLineLower.includes('rescheduled')
+          
+          if (hasHeaderKeywords && !nextLine.match(/^[A-Z]{3,4}-/i)) {
+            combinedHeader += ' ' + nextLine
+            headerLineCount++
+            j++
+          } else {
+            break
+          }
+        }
         break
       }
     }
 
-    // Parse header
-    const headerLine = lines[headerLineIndex]
-    const headers = parseCSVLine(headerLine).map(h => h.trim())
+    // Parse header (may be combined from multiple lines)
+    const headerLine = nonEmptyLines.slice(headerLineIndex, headerLineIndex + headerLineCount).join(' ')
+    const headers = parseCSVLine(headerLine).map(h => h.trim().replace(/\s+/g, ' '))
     
     console.log('[Upload] CSV Headers found at line', headerLineIndex + 1, ':', headers)
     
@@ -150,8 +255,9 @@ export async function POST(request: NextRequest) {
     }
 
     const records: any[] = []
-    // Start from the line after the header
-    for (let i = headerLineIndex + 1; i < lines.length; i++) {
+    // Start from the line after the header (accounting for multi-line header)
+    for (let i = headerLineIndex + headerLineCount; i < nonEmptyLines.length; i++) {
+      const line = nonEmptyLines[i]
       const line = lines[i]
       if (!line.trim()) continue
       
