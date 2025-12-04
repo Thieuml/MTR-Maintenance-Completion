@@ -21,6 +21,11 @@ interface UploadResult {
   totalLines: number
   validLines: number
   errors: ValidationError[]
+  warnings: Array<{
+    equipmentNumber: string
+    woNumber: string
+    message: string
+  }>
   uploaded: Array<{
     equipmentNumber: string
     woNumber: string
@@ -280,6 +285,7 @@ export async function POST(request: NextRequest) {
       totalLines: records.length,
       validLines: 0,
       errors: [],
+      warnings: [],
       uploaded: [],
       message: '',
     }
@@ -535,24 +541,41 @@ export async function POST(request: NextRequest) {
           slotIndex++
 
           // Check if the round-robin slot is available, if not try the other one
-          const availableSlot = await findAvailableSlot(
+          let availableSlot = await findAvailableSlot(
             record.wmPlannedDate,
             record.equipment.zoneMapping.zoneId,
             slots
           )
 
+          // If no slot available in preferred slots, try SLOT_2300 as fallback
           if (!availableSlot) {
-            result.errors.push({
-              line: record.lineNumber,
-              equipmentNumber: record.equipmentNumber,
-              woNumber: record.woNumber,
-              error: `No available time slot found for date ${dateKey} in zone ${record.equipment.zoneMapping.zone.code}`,
-            })
-            continue
+            const fallbackSlot = await findAvailableSlot(
+              record.wmPlannedDate,
+              record.equipment.zoneMapping.zoneId,
+              ['SLOT_2300'] as const
+            )
+            
+            if (fallbackSlot) {
+              availableSlot = fallbackSlot
+              // Add warning that non-23:00 unit was scheduled at 23:00
+              result.warnings.push({
+                equipmentNumber: record.equipmentNumber,
+                woNumber: record.woNumber,
+                message: `Non-23:00 unit scheduled at 23:00 slot (no other slots available on ${dateKey})`,
+              })
+            } else {
+              result.errors.push({
+                line: record.lineNumber,
+                equipmentNumber: record.equipmentNumber,
+                woNumber: record.woNumber,
+                error: `No available time slot found for date ${dateKey} in zone ${record.equipment.zoneMapping.zone.code}`,
+              })
+              continue
+            }
           }
 
-          // Type assertion: for non-2300 units, availableSlot can only be SLOT_0130 or SLOT_0330
-          const timeSlot = availableSlot as 'SLOT_0130' | 'SLOT_0330'
+          // Type assertion: availableSlot can be SLOT_0130, SLOT_0330, or SLOT_2300 (as fallback)
+          const timeSlot = availableSlot as 'SLOT_0130' | 'SLOT_0330' | 'SLOT_2300'
 
           await prisma.schedule.create({
             data: {
@@ -587,12 +610,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Build result message
-    if (result.errors.length === 0) {
+    if (result.errors.length === 0 && result.warnings.length === 0) {
       result.success = true
       result.message = `Successfully uploaded ${result.validLines} work order(s)`
+    } else if (result.errors.length === 0 && result.warnings.length > 0) {
+      result.success = true
+      result.message = `Successfully uploaded ${result.validLines} work order(s) with ${result.warnings.length} warning(s)`
     } else if (result.validLines > 0) {
       result.success = true
-      result.message = `Uploaded ${result.validLines} work order(s) with ${result.errors.length} error(s)`
+      result.message = `Uploaded ${result.validLines} work order(s) with ${result.errors.length} error(s)${result.warnings.length > 0 ? ` and ${result.warnings.length} warning(s)` : ''}`
     } else {
       result.message = `Upload failed: ${result.errors.length} error(s) found`
     }

@@ -12,6 +12,11 @@ interface UploadResult {
     woNumber: string
     error: string
   }>
+  warnings?: Array<{
+    equipmentNumber: string
+    woNumber: string
+    message: string
+  }>
   uploaded: Array<{
     equipmentNumber: string
     woNumber: string
@@ -451,6 +456,33 @@ export function WorkOrderManagement() {
               )}
             </div>
 
+            {/* Warnings */}
+            {uploadResult.warnings && uploadResult.warnings.length > 0 && (
+              <div className="mt-4">
+                <div className="font-medium text-sm text-yellow-900 mb-2">⚠️ Warnings:</div>
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-yellow-50">
+                      <tr>
+                        <th className="px-2 py-1 text-left text-yellow-900">Equipment</th>
+                        <th className="px-2 py-1 text-left text-yellow-900">WO Number</th>
+                        <th className="px-2 py-1 text-left text-yellow-900">Warning</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {uploadResult.warnings.map((warning, idx) => (
+                        <tr key={idx}>
+                          <td className="px-2 py-1 text-gray-900">{warning.equipmentNumber}</td>
+                          <td className="px-2 py-1 text-gray-900">{warning.woNumber}</td>
+                          <td className="px-2 py-1 text-yellow-800">{warning.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Error Details */}
             {uploadResult.errors.length > 0 && (
               <div className="mt-4">
@@ -459,19 +491,19 @@ export function WorkOrderManagement() {
                   <table className="min-w-full text-xs">
                     <thead className="bg-gray-100">
                       <tr>
-                        <th className="px-2 py-1 text-left">Line</th>
-                        <th className="px-2 py-1 text-left">Equipment</th>
-                        <th className="px-2 py-1 text-left">WO Number</th>
-                        <th className="px-2 py-1 text-left">Error</th>
+                        <th className="px-2 py-1 text-left text-gray-900">Line</th>
+                        <th className="px-2 py-1 text-left text-gray-900">Equipment</th>
+                        <th className="px-2 py-1 text-left text-gray-900">WO Number</th>
+                        <th className="px-2 py-1 text-left text-gray-900">Error</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {uploadResult.errors.map((error, idx) => (
                         <tr key={idx}>
-                          <td className="px-2 py-1">{error.line}</td>
-                          <td className="px-2 py-1">{error.equipmentNumber}</td>
-                          <td className="px-2 py-1">{error.woNumber}</td>
-                          <td className="px-2 py-1 text-red-600">{error.error}</td>
+                          <td className="px-2 py-1 text-gray-900">{error.line}</td>
+                          <td className="px-2 py-1 text-gray-900">{error.equipmentNumber}</td>
+                          <td className="px-2 py-1 text-gray-900">{error.woNumber}</td>
+                          <td className="px-2 py-1 text-red-700 font-medium">{error.error}</td>
                         </tr>
                       ))}
                     </tbody>
