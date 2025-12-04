@@ -258,7 +258,6 @@ export async function POST(request: NextRequest) {
     // Start from the line after the header (accounting for multi-line header)
     for (let i = headerLineIndex + headerLineCount; i < nonEmptyLines.length; i++) {
       const line = nonEmptyLines[i]
-      const line = lines[i]
       if (!line.trim()) continue
       
       const values = parseCSVLine(line)
