@@ -532,8 +532,6 @@ export async function POST(request: NextRequest) {
 
       for (const record of notEligible2300) {
         try {
-          // Start with round-robin slot, but check if it's available
-          let timeSlot = slots[slotIndex % slots.length]
           slotIndex++
 
           // Check if the round-robin slot is available, if not try the other one
@@ -553,7 +551,7 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          timeSlot = availableSlot
+          const timeSlot: 'SLOT_0130' | 'SLOT_0330' = availableSlot
 
           await prisma.schedule.create({
             data: {
