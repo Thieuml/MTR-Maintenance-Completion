@@ -431,14 +431,23 @@ export function WorkOrderManagement() {
                 <span className="text-red-800">✗ Upload Failed</span>
               )}
             </div>
-            <div className="text-sm text-gray-700 mb-3">
+            <div className="text-sm text-gray-700 mb-4">
               {uploadResult.message}
             </div>
-            <div className="text-sm text-gray-600 space-y-1">
-              <div>Total lines processed: {uploadResult.totalLines}</div>
-              <div>Successfully uploaded: {uploadResult.validLines}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div className="bg-white rounded-md p-3 border border-gray-200">
+                <div className="text-xs text-gray-500 mb-1">Total Lines Processed</div>
+                <div className="text-lg font-semibold text-gray-900">{uploadResult.totalLines}</div>
+              </div>
+              <div className="bg-white rounded-md p-3 border border-gray-200">
+                <div className="text-xs text-gray-500 mb-1">Successfully Uploaded</div>
+                <div className="text-lg font-semibold text-green-600">{uploadResult.validLines}</div>
+              </div>
               {uploadResult.errors.length > 0 && (
-                <div>Errors: {uploadResult.errors.length}</div>
+                <div className="bg-white rounded-md p-3 border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1">Errors</div>
+                  <div className="text-lg font-semibold text-red-600">{uploadResult.errors.length}</div>
+                </div>
               )}
             </div>
 
