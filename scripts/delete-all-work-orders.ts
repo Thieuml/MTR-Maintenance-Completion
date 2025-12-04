@@ -11,25 +11,20 @@
  * Or export it first:
  *   export DATABASE_URL='your-production-database-url'
  *   npx tsx scripts/delete-all-work-orders.ts
+ * 
+ * To skip confirmations (use with extreme caution):
+ *   DATABASE_URL='...' npx tsx scripts/delete-all-work-orders.ts --force
  */
 
 import { PrismaClient } from '@prisma/client'
+import * as readline from 'readline'
 
 // Create a new Prisma client that will use DATABASE_URL from environment
 // This ensures we use the explicitly provided DATABASE_URL, not from .env.local
 const prisma = new PrismaClient()
-import * as readline from 'readline'
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-})
-
-function question(query: string): Promise<string> {
-  return new Promise((resolve) => {
-    rl.question(query, resolve)
-  })
-}
+// Check for --force flag to skip confirmations
+const forceFlag = process.argv.includes('--force')
 
 async function deleteAllWorkOrders() {
   console.log('⚠️  WARNING: This will delete ALL work orders (schedules) from the database!')
@@ -49,12 +44,20 @@ async function deleteAllWorkOrders() {
                   dbUrl.includes('127.0.0.1') || 
                   (dbUrl.includes('5432') && !dbUrl.includes('neon') && !dbUrl.includes('vercel'))
   
-  if (isLocal) {
+  if (isLocal && !forceFlag) {
     console.log('⚠️  WARNING: DATABASE_URL appears to be a local database!')
     console.log('   Database URL:', dbUrl.substring(0, 80) + '...')
-    const proceed = await question('\nAre you sure you want to delete from this database? (yes/no): ')
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    })
+    const proceed = await new Promise<string>((resolve) => {
+      rl.question('\nAre you sure you want to delete from this database? (yes/no): ', resolve)
+    })
+    rl.close()
     if (proceed.toLowerCase() !== 'yes') {
       console.log('❌ Cancelled.')
+      await prisma.$disconnect()
       process.exit(0)
     }
   } else {
@@ -67,6 +70,7 @@ async function deleteAllWorkOrders() {
     console.log('✅ Database connection successful')
   } catch (error) {
     console.error('❌ Database connection failed:', error)
+    await prisma.$disconnect()
     process.exit(1)
   }
 
@@ -99,23 +103,40 @@ async function deleteAllWorkOrders() {
     console.log(`  ${i + 1}. ${wo.workOrderNumber || wo.id} - ${wo.status} - ${wo.r1PlannedDate ? new Date(wo.r1PlannedDate).toLocaleDateString() : 'No date'}`)
   })
 
-  // Confirmation
-  console.log('\n⚠️  This operation cannot be undone!')
-  const confirmation = await question('\nType "DELETE ALL" to confirm deletion: ')
+  // Confirmation (skip if --force flag)
+  if (!forceFlag) {
+    console.log('\n⚠️  This operation cannot be undone!')
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    })
+    
+    const confirmation = await new Promise<string>((resolve) => {
+      rl.question('\nType "DELETE ALL" to confirm deletion: ', resolve)
+    })
 
-  if (confirmation !== 'DELETE ALL') {
-    console.log('❌ Deletion cancelled. No changes made.')
-    await prisma.$disconnect()
-    process.exit(0)
-  }
+    if (confirmation !== 'DELETE ALL') {
+      console.log('❌ Deletion cancelled. No changes made.')
+      rl.close()
+      await prisma.$disconnect()
+      process.exit(0)
+    }
 
-  // Double confirmation
-  const doubleCheck = await question('\nAre you absolutely sure? Type "YES" to proceed: ')
+    // Double confirmation
+    const doubleCheck = await new Promise<string>((resolve) => {
+      rl.question('\nAre you absolutely sure? Type "YES" to proceed: ', resolve)
+    })
 
-  if (doubleCheck !== 'YES') {
-    console.log('❌ Deletion cancelled. No changes made.')
-    await prisma.$disconnect()
-    process.exit(0)
+    if (doubleCheck !== 'YES') {
+      console.log('❌ Deletion cancelled. No changes made.')
+      rl.close()
+      await prisma.$disconnect()
+      process.exit(0)
+    }
+    
+    rl.close()
+  } else {
+    console.log('\n⚠️  --force flag detected. Skipping confirmations...')
   }
 
   console.log('\n🗑️  Deleting all schedules and related records...')
@@ -139,10 +160,10 @@ async function deleteAllWorkOrders() {
     console.log('✅ Database is now empty and ready for new work order import')
   } catch (error) {
     console.error('❌ Error deleting schedules:', error)
+    await prisma.$disconnect()
     process.exit(1)
   } finally {
     await prisma.$disconnect()
-    rl.close()
   }
 }
 
@@ -155,4 +176,3 @@ deleteAllWorkOrders()
     console.error('❌ Error:', error)
     process.exit(1)
   })
-
