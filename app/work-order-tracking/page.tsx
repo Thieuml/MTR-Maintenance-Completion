@@ -745,7 +745,9 @@ function WorkOrderTrackingPageContent() {
                                   } else if (wo.status === 'PLANNED') {
                                     // PLANNED status - check if date is in future or past
                                     if (scheduleDate && scheduleDate >= today) {
-                                      displayStatus = wo.isLate ? 'Planned (Late)' : 'Planned'
+                                      // Check isLate flag - ensure it's a boolean
+                                      const isLate = Boolean(wo.isLate)
+                                      displayStatus = isLate ? 'Planned (Late)' : 'Planned'
                                       statusClass = 'bg-blue-100 text-blue-800'
                                     } else {
                                       // PLANNED with past date (CRON hasn't run yet) - show as Pending
