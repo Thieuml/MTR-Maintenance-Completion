@@ -29,22 +29,10 @@ export async function POST(
 
     const { action } = validation.data
 
-    // Get the schedule (optimized: only fetch visits if marking as completed)
-    const scheduleQuery: any = {
+    // Get the schedule (no visits needed - completion is manual)
+    const schedule = await prisma.schedule.findUnique({
       where: { id: scheduleId },
-    }
-    
-    if (action === 'completed') {
-      scheduleQuery.include = {
-        visits: {
-          take: 1,
-          orderBy: { completionDate: 'desc' },
-          select: { completionDate: true },
-        },
-      }
-    }
-    
-    const schedule = await prisma.schedule.findUnique(scheduleQuery)
+    })
 
     if (!schedule) {
       return NextResponse.json(
@@ -54,16 +42,25 @@ export async function POST(
     }
 
     // Calculate isLate flag only for completed action
+    // isLate = true if r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+    // This means: scheduled less than 6 days before the due date
     let isLate = false
-    let completionDate = new Date()
     
     if (action === 'completed') {
-      completionDate = (schedule as any).visits?.[0]?.completionDate || new Date()
-      if (schedule.mtrPlannedStartDate && completionDate) {
-        const mtrDate = new Date(schedule.mtrPlannedStartDate)
-        const completion = new Date(completionDate)
-        const sixDaysInMs = 6 * 24 * 60 * 60 * 1000
-        isLate = completion.getTime() > (mtrDate.getTime() + sixDaysInMs)
+      if (schedule.r1PlannedDate && schedule.dueDate) {
+        const scheduledDate = new Date(schedule.r1PlannedDate)
+        const dueDate = new Date(schedule.dueDate)
+        
+        // Normalize to midnight for date comparison
+        scheduledDate.setHours(0, 0, 0, 0)
+        dueDate.setHours(0, 0, 0, 0)
+        
+        // Calculate dueDate - 5 days
+        const lateThreshold = new Date(dueDate)
+        lateThreshold.setDate(lateThreshold.getDate() - 5)
+        
+        // Late if scheduledDate >= dueDate - 5 days (scheduled less than 6 days before due date)
+        isLate = scheduledDate >= lateThreshold
       }
     }
 

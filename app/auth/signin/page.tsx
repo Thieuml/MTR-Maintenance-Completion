@@ -7,20 +7,23 @@ import { Navigation } from '@/components/shared/Navigation'
 
 export default function SignInPage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true) // Start with loading true
+  const [isSigningIn, setIsSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     // Check if user is already signed in
     getSession().then((session) => {
+      setIsLoading(false)
       if (session) {
-        router.push('/')
+        // User is already signed in, redirect immediately
+        router.replace('/')
       }
     })
   }, [router])
 
   const handleGoogleSignIn = async () => {
-    setIsLoading(true)
+    setIsSigningIn(true)
     setError(null)
     
     try {
@@ -31,18 +34,30 @@ export default function SignInPage() {
       
       if (result?.error) {
         setError('Failed to sign in. Please try again.')
-        setIsLoading(false)
+        setIsSigningIn(false)
       }
     } catch (err) {
       setError('An error occurred during sign in.')
-      setIsLoading(false)
+      setIsSigningIn(false)
     }
+  }
+
+  // Show loading state while checking session
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <div className="ml-64 flex items-center justify-center min-h-screen px-4">
+      <div className="flex items-center justify-center min-h-screen px-4">
         <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
           <div>
             <h2 className="text-center text-3xl font-extrabold text-gray-900">
@@ -62,10 +77,10 @@ export default function SignInPage() {
           <div className="border-t border-gray-200 pt-8">
             <button
               onClick={handleGoogleSignIn}
-              disabled={isLoading}
+              disabled={isSigningIn}
               className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isLoading ? (
+              {isSigningIn ? (
                 <>
                   <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

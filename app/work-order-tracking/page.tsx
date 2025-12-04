@@ -11,6 +11,11 @@ import html2canvas from 'html2canvas'
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
+type VisitReport = {
+  hasReport: boolean
+  pdfReportUrl: string | null
+}
+
 interface WorkOrder {
   id: string
   workOrderNumber: string
@@ -46,6 +51,8 @@ function WorkOrderTrackingPageContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'completed' | 'to_reschedule' | null>(null)
   const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+  const [visitReports, setVisitReports] = useState<Record<string, VisitReport>>({})
+  const [isLoadingReports, setIsLoadingReports] = useState(false)
 
   // Update tab if URL parameter changes
   useEffect(() => {
@@ -81,6 +88,25 @@ function WorkOrderTrackingPageContent() {
 
   const workOrders = data?.workOrders || []
 
+  // Debug: Log all work orders and specifically look for 5000428272
+  useEffect(() => {
+    console.log('[Debug] Total work orders:', workOrders.length)
+    const target = workOrders.find((wo: any) => wo.workOrderNumber === '5000428272')
+    if (target) {
+      console.log('[Debug] Found 5000428272 in workOrders:', {
+        status: target.status,
+        r1PlannedDate: target.r1PlannedDate,
+        id: target.id,
+      })
+    } else {
+      console.log('[Debug] 5000428272 NOT in workOrders array')
+      console.log('[Debug] Sample work orders:', workOrders.slice(0, 3).map((w: any) => ({
+        workOrderNumber: w.workOrderNumber,
+        status: w.status,
+      })))
+    }
+  }, [workOrders])
+
   // Filter and categorize work orders
   const categorized = useMemo(() => {
     const today = new Date()
@@ -91,7 +117,17 @@ function WorkOrderTrackingPageContent() {
     const completed: WorkOrder[] = []
     const atRisk: WorkOrder[] = []
 
+    console.log('[Debug] Categorizing', workOrders.length, 'work orders')
+
     workOrders.forEach((wo) => {
+      // Debug: Log the specific work order we're looking for
+      if (wo.workOrderNumber === '5000428272') {
+        console.log('[Debug] Processing 5000428272 in categorization:', {
+          status: wo.status,
+          r1PlannedDate: wo.r1PlannedDate,
+          hasR1PlannedDate: !!wo.r1PlannedDate,
+        })
+      }
       // Filter by search term first
       if (searchTerm.trim()) {
         const search = searchTerm.trim().toLowerCase()
@@ -131,7 +167,10 @@ function WorkOrderTrackingPageContent() {
         // MISSED or SKIPPED - needs rescheduling
         toReschedule.push(wo)
       } else if (wo.status === 'PENDING') {
-        // PENDING: Past dates awaiting validation
+        // PENDING: Always needs validation (regardless of date)
+        if (wo.workOrderNumber === '5000428272') {
+          console.log('[Debug] Adding 5000428272 to toValidate (PENDING status)')
+        }
         toValidate.push(wo)
       } else if (wo.status === 'PLANNED' && scheduleDate < today) {
         // PLANNED with past date (CRON hasn't run yet) - needs validation
@@ -151,6 +190,57 @@ function WorkOrderTrackingPageContent() {
       atRisk,
     }
   }, [workOrders, searchTerm])
+
+  // Fetch visit reports when "To be validated" tab is active and has items
+  useEffect(() => {
+    const fetchReports = async () => {
+      if (activeTab !== 'to_validate' || categorized.toValidate.length === 0) {
+        setVisitReports({})
+        return
+      }
+
+      setIsLoadingReports(true)
+      try {
+        const scheduleIds = categorized.toValidate.map((wo) => wo.id)
+        
+        // Debug: Check if 5000428272 is in the list
+        const targetWO = categorized.toValidate.find((wo) => wo.workOrderNumber === '5000428272')
+        if (targetWO) {
+          console.log('[Debug] 5000428272 is in toValidate, fetching reports for it. Schedule ID:', targetWO.id)
+        } else {
+          console.log('[Debug] 5000428272 is NOT in toValidate array')
+          console.log('[Debug] toValidate items:', categorized.toValidate.map(wo => wo.workOrderNumber))
+        }
+        
+        const response = await fetch('/api/visits/reports', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ scheduleIds }),
+        })
+
+        if (!response.ok) {
+          console.error('Failed to fetch visit reports')
+          return
+        }
+
+        const reports = await response.json()
+        setVisitReports(reports)
+        
+        // Debug: Check if report was found for 5000428272
+        if (targetWO && reports[targetWO.id]) {
+          console.log('[Debug] Report for 5000428272:', reports[targetWO.id])
+        }
+      } catch (error) {
+        console.error('Error fetching visit reports:', error)
+      } finally {
+        setIsLoadingReports(false)
+      }
+    }
+
+    fetchReports()
+  }, [activeTab, categorized])
 
   const currentTabData = useMemo(() => {
     switch (activeTab) {
@@ -229,6 +319,54 @@ function WorkOrderTrackingPageContent() {
     }
   }
 
+  const handleValidateAllWithReport = async () => {
+    if (activeTab !== 'to_validate') return
+
+    // Find all work orders in the current tab that have a WM report
+    const workOrdersWithReport = currentTabData.filter((wo: any) => {
+      const report = visitReports[wo.id]
+      return report?.hasReport && report.pdfReportUrl
+    })
+
+    if (workOrdersWithReport.length === 0) {
+      alert('No work orders with WM reports found.')
+      return
+    }
+
+    if (!confirm(`Validate ${workOrdersWithReport.length} work order(s) with WM reports as completed?`)) {
+      return
+    }
+
+    setIsBulkProcessing(true)
+    try {
+      const promises = workOrdersWithReport.map((wo: any) =>
+        fetch(`/api/schedules/${wo.id}/validate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action: 'completed' }),
+        })
+      )
+
+      const results = await Promise.allSettled(promises)
+      const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length
+
+      if (failed > 0) {
+        alert(`Completed ${workOrdersWithReport.length - failed} items. ${failed} failed.`)
+      } else {
+        alert(`Successfully validated ${workOrdersWithReport.length} work order(s) with WM reports.`)
+      }
+
+      mutate()
+    } catch (error) {
+      console.error('Error validating all with report:', error)
+      alert('Failed to validate items. Please try again.')
+    } finally {
+      setIsBulkProcessing(false)
+    }
+  }
+
   const handleSelectAll = () => {
     if (activeTab === 'to_validate') {
       if (selectedIds.size === categorized.toValidate.length) {
@@ -266,13 +404,13 @@ function WorkOrderTrackingPageContent() {
           {/* Search Bar */}
           <div className="mb-4 bg-white rounded-lg shadow-sm p-4 border border-gray-200">
             <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-gray-700">Search by WO #:</label>
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Search by WO #:</label>
               <input
                 type="text"
                 placeholder="Enter work order number..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                className="w-64 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
               />
               {searchTerm && (
                 <button
@@ -281,6 +419,18 @@ function WorkOrderTrackingPageContent() {
                 >
                   Clear
                 </button>
+              )}
+              {activeTab === 'to_validate' && (
+                <div className="ml-auto">
+                  <button
+                    onClick={handleValidateAllWithReport}
+                    disabled={isBulkProcessing || currentTabData.filter((wo: any) => visitReports[wo.id]?.hasReport).length === 0}
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    title={`Validate all work orders with WM reports (${currentTabData.filter((wo: any) => visitReports[wo.id]?.hasReport).length} available)`}
+                  >
+                    {isBulkProcessing ? 'Processing...' : `Validate All with Report (${currentTabData.filter((wo: any) => visitReports[wo.id]?.hasReport).length})`}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -517,10 +667,17 @@ function WorkOrderTrackingPageContent() {
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">
                             Due Date
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
-                            Status
-                          </th>
-                          {activeTab !== 'completed' && (
+                          {activeTab === 'to_validate' && (
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                              WM Report
+                            </th>
+                          )}
+                          {activeTab !== 'to_validate' && (
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                              Status
+                            </th>
+                          )}
+                          {activeTab !== 'completed' && activeTab !== 'at_risk' && (
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
                               Actions
                             </th>
@@ -562,56 +719,97 @@ function WorkOrderTrackingPageContent() {
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
                               {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : '-'}
                             </td>
-                            <td className="px-4 py-3 text-sm">
-                              {(() => {
-                                const scheduleDate = wo.r1PlannedDate ? new Date(wo.r1PlannedDate) : null
-                                if (scheduleDate) scheduleDate.setHours(0, 0, 0, 0)
-                                const today = new Date()
-                                today.setHours(0, 0, 0, 0)
+                            {activeTab === 'to_validate' && (
+                              <td className="px-4 py-3 text-sm text-center">
+                                {isLoadingReports ? (
+                                  <span className="text-gray-400">Loading...</span>
+                                ) : (() => {
+                                  const report = visitReports[wo.id]
+                                  if (report?.hasReport && report.pdfReportUrl) {
+                                    return (
+                                      <a
+                                        href={report.pdfReportUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
+                                        title="View PDF Report"
+                                      >
+                                        <svg
+                                          width="24"
+                                          height="24"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          className="flex-shrink-0"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            clipRule="evenodd"
+                                            d="M21.996 14.999L21.999 15.038L22 15.05L21.999 15.04L22 18.8327C22 19.8871 21.1841 20.7509 20.1493 20.8272L20 20.8327H4C2.94564 20.8327 2.08183 20.0169 2.00549 18.982L2 18.8327V15C2.02797 14.6639 2.30817 14.4 2.65 14.4C2.97635 14.4 3.24653 14.6405 3.29295 14.954L3.295 14.999L3.3 15V18.8327C3.3 19.1871 3.56334 19.48 3.90501 19.5263L4 19.5327H20C20.3544 19.5327 20.6473 19.2694 20.6936 18.9277L20.7 18.8327V15C20.728 14.6639 21.0082 14.4 21.35 14.4C21.6763 14.4 21.9465 14.6405 21.993 14.954L21.996 14.999L22 15L21.999 15.038L21.996 14.999ZM12.05 1.90002C12.409 1.90002 12.7 2.19104 12.7 2.55002L12.7 13.57L17.5839 9.50069C17.8597 9.27087 18.2695 9.30813 18.4994 9.58391C18.7292 9.85969 18.6919 10.2696 18.4161 10.4994L12.4161 15.4994C12.1751 15.7003 11.8249 15.7003 11.5839 15.4994L5.58389 10.4994C5.30811 10.2696 5.27085 9.85969 5.50066 9.58391C5.73048 9.30813 6.14035 9.27087 6.41613 9.50069L11.4 13.653L11.4 2.55002C11.4 2.19104 11.691 1.90002 12.05 1.90002Z"
+                                            fill="currentColor"
+                                          />
+                                        </svg>
+                                      </a>
+                                    )
+                                  }
+                                  return (
+                                    <span className="text-gray-400 italic">no WM report</span>
+                                  )
+                                })()}
+                              </td>
+                            )}
+                            {activeTab !== 'to_validate' && (
+                              <td className="px-4 py-3 text-sm">
+                                {(() => {
+                                  const scheduleDate = wo.r1PlannedDate ? new Date(wo.r1PlannedDate) : null
+                                  if (scheduleDate) scheduleDate.setHours(0, 0, 0, 0)
+                                  const today = new Date()
+                                  today.setHours(0, 0, 0, 0)
 
-                                // Status display logic aligned with new status flow
-                                let displayStatus = wo.status
-                                let statusClass = 'bg-gray-100 text-gray-700'
+                                  // Status display logic aligned with new status flow
+                                  let displayStatus = wo.status
+                                  let statusClass = 'bg-gray-100 text-gray-700'
 
-                                if (wo.status === 'COMPLETED') {
-                                  displayStatus = wo.isLate ? 'Completed (Late)' : 'Completed'
-                                  statusClass = 'bg-green-100 text-green-800'
-                                } else if (wo.status === 'MISSED') {
-                                  displayStatus = 'Missed'
-                                  statusClass = 'bg-red-100 text-red-800'
-                                } else if (wo.status === 'SKIPPED') {
-                                  displayStatus = 'Skipped'
-                                  statusClass = 'bg-orange-100 text-orange-800'
-                                } else if (wo.status === 'PENDING') {
-                                  displayStatus = 'Pending'
-                                  statusClass = 'bg-yellow-100 text-yellow-800'
-                                } else if (wo.status === 'PLANNED') {
-                                  // PLANNED status - check if date is in future or past
-                                  if (scheduleDate && scheduleDate >= today) {
-                                    displayStatus = wo.isLate ? 'Planned (Late)' : 'Planned'
-                                    statusClass = 'bg-blue-100 text-blue-800'
-                                  } else {
-                                    // PLANNED with past date (CRON hasn't run yet) - show as Pending
+                                  if (wo.status === 'COMPLETED') {
+                                    displayStatus = wo.isLate ? 'Completed (Late)' : 'Completed'
+                                    statusClass = 'bg-green-100 text-green-800'
+                                  } else if (wo.status === 'MISSED') {
+                                    displayStatus = 'Missed'
+                                    statusClass = 'bg-red-100 text-red-800'
+                                  } else if (wo.status === 'SKIPPED') {
+                                    displayStatus = 'Skipped'
+                                    statusClass = 'bg-orange-100 text-orange-800'
+                                  } else if (wo.status === 'PENDING') {
                                     displayStatus = 'Pending'
                                     statusClass = 'bg-yellow-100 text-yellow-800'
+                                  } else if (wo.status === 'PLANNED') {
+                                    // PLANNED status - check if date is in future or past
+                                    if (scheduleDate && scheduleDate >= today) {
+                                      displayStatus = wo.isLate ? 'Planned (Late)' : 'Planned'
+                                      statusClass = 'bg-blue-100 text-blue-800'
+                                    } else {
+                                      // PLANNED with past date (CRON hasn't run yet) - show as Pending
+                                      displayStatus = 'Pending'
+                                      statusClass = 'bg-yellow-100 text-yellow-800'
+                                    }
+                                  } else if (wo.status === 'CANCELLED') {
+                                    displayStatus = 'Cancelled'
+                                    statusClass = 'bg-gray-100 text-gray-600'
+                                  } else {
+                                    // Unknown status - fallback
+                                    displayStatus = wo.status
+                                    statusClass = 'bg-gray-100 text-gray-700'
                                   }
-                                } else if (wo.status === 'CANCELLED') {
-                                  displayStatus = 'Cancelled'
-                                  statusClass = 'bg-gray-100 text-gray-600'
-                                } else {
-                                  // Unknown status - fallback
-                                  displayStatus = wo.status
-                                  statusClass = 'bg-gray-100 text-gray-700'
-                                }
 
-                                return (
-                                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${statusClass}`}>
-                                    {displayStatus}
-                                  </span>
-                                )
-                              })()}
-                            </td>
-                            {activeTab !== 'completed' && (
+                                  return (
+                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${statusClass}`}>
+                                      {displayStatus}
+                                    </span>
+                                  )
+                                })()}
+                              </td>
+                            )}
+                            {activeTab !== 'completed' && activeTab !== 'at_risk' && (
                               <td className="px-4 py-3 text-sm">
                                 <div className="flex items-center gap-2">
                                   {activeTab === 'to_validate' && (
@@ -1123,4 +1321,5 @@ function DailyReport({
     </div>
   )
 }
+
 

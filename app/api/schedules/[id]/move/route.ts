@@ -215,12 +215,23 @@ export async function POST(
     const skippedCountIncrement = wasPending ? 1 : 0
     const lastSkippedDateValue = wasPending ? scheduleToMove.r1PlannedDate : scheduleToMove.lastSkippedDate
 
-    // Calculate isLate flag for new PLANNED status: r1PlannedDate > mtrPlannedStartDate + 6 days
+    // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+    // This means: scheduled less than 6 days before the due date
     let isLate = false
-    if (scheduleToMove.mtrPlannedStartDate) {
-      const mtrDate = new Date(scheduleToMove.mtrPlannedStartDate)
-      const sixDaysInMs = 6 * 24 * 60 * 60 * 1000
-      isLate = newDateObj.getTime() > (mtrDate.getTime() + sixDaysInMs)
+    if (scheduleToMove.dueDate) {
+      const scheduledDate = new Date(newDateObj)
+      const dueDate = new Date(scheduleToMove.dueDate)
+      
+      // Normalize to midnight for date comparison
+      scheduledDate.setHours(0, 0, 0, 0)
+      dueDate.setHours(0, 0, 0, 0)
+      
+      // Calculate dueDate - 5 days
+      const lateThreshold = new Date(dueDate)
+      lateThreshold.setDate(lateThreshold.getDate() - 5)
+      
+      // Late if scheduledDate >= dueDate - 5 days (scheduled less than 6 days before due date)
+      isLate = scheduledDate >= lateThreshold
     }
 
     // Determine behavior: swap vs push-forward
@@ -233,11 +244,22 @@ export async function POST(
       // Swap scenario: both schedules are PLANNED, swap their positions
       const originalDate = new Date(scheduleToMove.r1PlannedDate!)
 
+      // Calculate isLate for swapped schedule: r1PlannedDate >= dueDate - 5 days
       let isLateSwap = false
-      if (scheduleToConflict.mtrPlannedStartDate) {
-        const mtrDateSwap = new Date(scheduleToConflict.mtrPlannedStartDate)
-        const sixDaysInMs = 6 * 24 * 60 * 60 * 1000
-        isLateSwap = originalDate.getTime() > mtrDateSwap.getTime() + sixDaysInMs
+      if (scheduleToConflict.dueDate) {
+        const scheduledDate = new Date(originalDate)
+        const dueDate = new Date(scheduleToConflict.dueDate)
+        
+        // Normalize to midnight for date comparison
+        scheduledDate.setHours(0, 0, 0, 0)
+        dueDate.setHours(0, 0, 0, 0)
+        
+        // Calculate dueDate - 5 days
+        const lateThreshold = new Date(dueDate)
+        lateThreshold.setDate(lateThreshold.getDate() - 5)
+        
+        // Late if scheduledDate >= dueDate - 5 days
+        isLateSwap = scheduledDate >= lateThreshold
       }
 
       const [updated1, updated2] = await prisma.$transaction([
@@ -336,10 +358,21 @@ export async function POST(
       pushedScheduleNextKey = nextSlot.dateKey
       pushedScheduleTimeSlot = nextSlot.timeSlot
 
-      if (scheduleToConflict.mtrPlannedStartDate) {
-        const mtrDate = new Date(scheduleToConflict.mtrPlannedStartDate)
-        const sixDaysInMs = 6 * 24 * 60 * 60 * 1000
-        pushedScheduleIsLate = pushedScheduleDate.getTime() > mtrDate.getTime() + sixDaysInMs
+      // Calculate isLate for pushed schedule: r1PlannedDate >= dueDate - 5 days
+      if (scheduleToConflict.dueDate && pushedScheduleDate) {
+        const scheduledDate = new Date(pushedScheduleDate)
+        const dueDate = new Date(scheduleToConflict.dueDate)
+        
+        // Normalize to midnight for date comparison
+        scheduledDate.setHours(0, 0, 0, 0)
+        dueDate.setHours(0, 0, 0, 0)
+        
+        // Calculate dueDate - 5 days
+        const lateThreshold = new Date(dueDate)
+        lateThreshold.setDate(lateThreshold.getDate() - 5)
+        
+        // Late if scheduledDate >= dueDate - 5 days
+        pushedScheduleIsLate = scheduledDate >= lateThreshold
       } else {
         pushedScheduleIsLate = scheduleToConflict.isLate ?? false
       }

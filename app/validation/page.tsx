@@ -1,14 +1,21 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useSchedule } from '@/lib/hooks'
 import { Navigation } from '@/components/shared/Navigation'
+
+type VisitReport = {
+  hasReport: boolean
+  pdfReportUrl: string | null
+}
 
 export default function ValidationPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<'completed' | 'to_reschedule' | null>(null)
   const [isBulkProcessing, setIsBulkProcessing] = useState(false)
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
+  const [visitReports, setVisitReports] = useState<Record<string, VisitReport>>({})
+  const [isLoadingReports, setIsLoadingReports] = useState(false)
   // Show all past services that haven't been actioned
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -39,6 +46,42 @@ export default function ValidationPage() {
       return false
     })
   }, [schedules, today])
+
+  // Fetch visit reports when pending schedules change
+  useEffect(() => {
+    const fetchReports = async () => {
+      if (pendingSchedules.length === 0) {
+        setVisitReports({})
+        return
+      }
+
+      setIsLoadingReports(true)
+      try {
+        const scheduleIds = pendingSchedules.map((s: any) => s.id)
+        const response = await fetch('/api/visits/reports', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ scheduleIds }),
+        })
+
+        if (!response.ok) {
+          console.error('Failed to fetch visit reports')
+          return
+        }
+
+        const reports = await response.json()
+        setVisitReports(reports)
+      } catch (error) {
+        console.error('Error fetching visit reports:', error)
+      } finally {
+        setIsLoadingReports(false)
+      }
+    }
+
+    fetchReports()
+  }, [pendingSchedules])
 
   const handleValidate = async (scheduleId: string, action: 'completed' | 'to_reschedule') => {
     setProcessingIds(prev => new Set(prev).add(scheduleId))
@@ -247,6 +290,9 @@ export default function ValidationPage() {
                         Engineers
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
+                        WM Report
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
                         Status
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
@@ -297,6 +343,43 @@ export default function ValidationPage() {
                                 / {schedule.rotatingEngineer.name}
                               </span>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-center">
+                            {isLoadingReports ? (
+                              <span className="text-gray-400">Loading...</span>
+                            ) : (() => {
+                              const report = visitReports[schedule.id]
+                              if (report?.hasReport && report.pdfReportUrl) {
+                                return (
+                                  <a
+                                    href={report.pdfReportUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
+                                    title="View PDF Report"
+                                  >
+                                    <svg
+                                      width="24"
+                                      height="24"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className="flex-shrink-0"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        clipRule="evenodd"
+                                        d="M21.996 14.999L21.999 15.038L22 15.05L21.999 15.04L22 18.8327C22 19.8871 21.1841 20.7509 20.1493 20.8272L20 20.8327H4C2.94564 20.8327 2.08183 20.0169 2.00549 18.982L2 18.8327V15C2.02797 14.6639 2.30817 14.4 2.65 14.4C2.97635 14.4 3.24653 14.6405 3.29295 14.954L3.295 14.999L3.3 15V18.8327C3.3 19.1871 3.56334 19.48 3.90501 19.5263L4 19.5327H20C20.3544 19.5327 20.6473 19.2694 20.6936 18.9277L20.7 18.8327V15C20.728 14.6639 21.0082 14.4 21.35 14.4C21.6763 14.4 21.9465 14.6405 21.993 14.954L21.996 14.999L22 15L21.999 15.038L21.996 14.999ZM12.05 1.90002C12.409 1.90002 12.7 2.19104 12.7 2.55002L12.7 13.57L17.5839 9.50069C17.8597 9.27087 18.2695 9.30813 18.4994 9.58391C18.7292 9.85969 18.6919 10.2696 18.4161 10.4994L12.4161 15.4994C12.1751 15.7003 11.8249 15.7003 11.5839 15.4994L5.58389 10.4994C5.30811 10.2696 5.27085 9.85969 5.50066 9.58391C5.73048 9.30813 6.14035 9.27087 6.41613 9.50069L11.4 13.653L11.4 2.55002C11.4 2.19104 11.691 1.90002 12.05 1.90002Z"
+                                        fill="currentColor"
+                                      />
+                                    </svg>
+                                  </a>
+                                )
+                              }
+                              return (
+                                <span className="text-gray-400 italic">no WM report</span>
+                              )
+                            })()}
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">

@@ -1,35 +1,41 @@
-import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-export default withAuth(
-  function middleware(req) {
-    // You can add additional middleware logic here
-    // For example, role-based access control
+export async function middleware(req: NextRequest) {
+  // Public routes: auth pages, API routes (handled individually), health check
+  const publicPaths = ['/auth', '/api/auth', '/api/health']
+  const isPublicPath = publicPaths.some((path) => req.nextUrl.pathname.startsWith(path))
+  
+  // API routes - let them handle their own authentication
+  if (req.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.next()
-  },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        // Public routes: auth pages, API routes (handled individually), health check
-        const publicPaths = ['/auth', '/api/auth', '/api/health']
-        const isPublicPath = publicPaths.some((path) => req.nextUrl.pathname.startsWith(path))
-        
-        // API routes - let them handle their own authentication
-        // This prevents middleware from redirecting API calls
-        if (req.nextUrl.pathname.startsWith('/api/')) {
-          return true
-        }
-        
-        if (isPublicPath) {
-          return true
-        }
-        
-        // Require authentication for page routes only
-        return !!token
-      },
-    },
   }
-)
+  
+  // Allow public paths
+  if (isPublicPath) {
+    return NextResponse.next()
+  }
+  
+  // Check for session using getServerSession (works with database sessions)
+  // Note: getServerSession needs the request in a specific format
+  // We'll check the session cookie directly as a fallback
+  const sessionToken = req.cookies.get(
+    process.env.NODE_ENV === 'production' 
+      ? '__Secure-next-auth.session-token' 
+      : 'next-auth.session-token'
+  )?.value
+  
+  // If no session cookie, redirect to sign-in
+  if (!sessionToken) {
+    const signInUrl = new URL('/auth/signin', req.url)
+    signInUrl.searchParams.set('callbackUrl', req.url)
+    return NextResponse.redirect(signInUrl)
+  }
+  
+  return NextResponse.next()
+}
 
 export const config = {
   matcher: [
