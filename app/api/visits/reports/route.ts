@@ -33,12 +33,14 @@ export async function POST(request: NextRequest) {
       },
       select: {
         id: true,
+        workOrderNumber: true,
+        r1PlannedDate: true,
+        dueDate: true,
         equipment: {
           select: {
             equipmentNumber: true,
           },
         },
-        r1PlannedDate: true,
       },
     })
 
