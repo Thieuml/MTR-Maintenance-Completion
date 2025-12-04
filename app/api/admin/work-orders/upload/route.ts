@@ -436,9 +436,64 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Assign 11pm-eligible units to SLOT_2300
+      // Helper function to find an available slot for a given date and zone
+      const findAvailableSlot = async (
+        date: Date,
+        zoneId: string,
+        preferredSlots: readonly string[]
+      ): Promise<string | null> => {
+        // Normalize date to start of day for comparison
+        const dateStart = new Date(date)
+        dateStart.setHours(0, 0, 0, 0)
+        const dateEnd = new Date(date)
+        dateEnd.setHours(23, 59, 59, 999)
+
+        // Check each preferred slot in order
+        for (const slot of preferredSlots) {
+          const existing = await prisma.schedule.findFirst({
+            where: {
+              zoneId,
+              r1PlannedDate: {
+                gte: dateStart,
+                lte: dateEnd,
+              },
+              timeSlot: slot,
+              status: {
+                not: 'CANCELLED',
+              },
+            },
+          })
+
+          if (!existing) {
+            return slot
+          }
+        }
+
+        return null
+      }
+
+      // Assign 11pm-eligible units to SLOT_2300, but check for conflicts
+      // If SLOT_2300 is occupied, try SLOT_0130 or SLOT_0330 as fallback
       for (const record of eligible2300) {
         try {
+          // Preferred slots for 23:00-eligible units: SLOT_2300 first, then SLOT_0130, SLOT_0330
+          const preferredSlots = ['SLOT_2300', 'SLOT_0130', 'SLOT_0330'] as const
+          const availableSlot = await findAvailableSlot(
+            record.wmPlannedDate,
+            record.equipment.zoneMapping.zoneId,
+            preferredSlots
+          )
+
+          if (!availableSlot) {
+            result.errors.push({
+              line: record.lineNumber,
+              equipmentNumber: record.equipmentNumber,
+              woNumber: record.woNumber,
+              error: `No available time slot found for date ${dateKey} in zone ${record.equipment.zoneMapping.zone.code}`,
+            })
+            continue
+          }
+
           await prisma.schedule.create({
             data: {
               equipmentId: record.equipment.id,
@@ -447,7 +502,7 @@ export async function POST(request: NextRequest) {
               r1PlannedDate: record.wmPlannedDate,
               dueDate: record.dueDate,
               batch: record.equipment.zoneMapping.batch,
-              timeSlot: 'SLOT_2300',
+              timeSlot: availableSlot,
               workOrderNumber: record.woNumber,
               mtrPlannedStartDate: record.mtrPlannedDate,
               status: 'PLANNED',
@@ -471,14 +526,35 @@ export async function POST(request: NextRequest) {
       }
 
       // Distribute non-11pm units across SLOT_0130 and SLOT_0330 in round-robin
+      // But check for conflicts and use next available slot if needed
       const slots = ['SLOT_0130', 'SLOT_0330'] as const
       let slotIndex = 0
 
       for (const record of notEligible2300) {
-        const timeSlot = slots[slotIndex % slots.length]
-        slotIndex++
-
         try {
+          // Start with round-robin slot, but check if it's available
+          let timeSlot = slots[slotIndex % slots.length]
+          slotIndex++
+
+          // Check if the round-robin slot is available, if not try the other one
+          const availableSlot = await findAvailableSlot(
+            record.wmPlannedDate,
+            record.equipment.zoneMapping.zoneId,
+            slots
+          )
+
+          if (!availableSlot) {
+            result.errors.push({
+              line: record.lineNumber,
+              equipmentNumber: record.equipmentNumber,
+              woNumber: record.woNumber,
+              error: `No available time slot found for date ${dateKey} in zone ${record.equipment.zoneMapping.zone.code}`,
+            })
+            continue
+          }
+
+          timeSlot = availableSlot
+
           await prisma.schedule.create({
             data: {
               equipmentId: record.equipment.id,
