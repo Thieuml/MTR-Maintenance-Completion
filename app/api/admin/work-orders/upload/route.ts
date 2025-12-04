@@ -551,7 +551,8 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          const timeSlot: 'SLOT_0130' | 'SLOT_0330' = availableSlot
+          // Type assertion: for non-2300 units, availableSlot can only be SLOT_0130 or SLOT_0330
+          const timeSlot = availableSlot as 'SLOT_0130' | 'SLOT_0330'
 
           await prisma.schedule.create({
             data: {
