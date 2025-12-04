@@ -88,25 +88,6 @@ function WorkOrderTrackingPageContent() {
 
   const workOrders = data?.workOrders || []
 
-  // Debug: Log all work orders and specifically look for 5000428272
-  useEffect(() => {
-    console.log('[Debug] Total work orders:', workOrders.length)
-    const target = workOrders.find((wo: any) => wo.workOrderNumber === '5000428272')
-    if (target) {
-      console.log('[Debug] Found 5000428272 in workOrders:', {
-        status: target.status,
-        r1PlannedDate: target.r1PlannedDate,
-        id: target.id,
-      })
-    } else {
-      console.log('[Debug] 5000428272 NOT in workOrders array')
-      console.log('[Debug] Sample work orders:', workOrders.slice(0, 3).map((w: any) => ({
-        workOrderNumber: w.workOrderNumber,
-        status: w.status,
-      })))
-    }
-  }, [workOrders])
-
   // Filter and categorize work orders
   const categorized = useMemo(() => {
     const today = new Date()
@@ -117,17 +98,7 @@ function WorkOrderTrackingPageContent() {
     const completed: WorkOrder[] = []
     const atRisk: WorkOrder[] = []
 
-    console.log('[Debug] Categorizing', workOrders.length, 'work orders')
-
     workOrders.forEach((wo) => {
-      // Debug: Log the specific work order we're looking for
-      if (wo.workOrderNumber === '5000428272') {
-        console.log('[Debug] Processing 5000428272 in categorization:', {
-          status: wo.status,
-          r1PlannedDate: wo.r1PlannedDate,
-          hasR1PlannedDate: !!wo.r1PlannedDate,
-        })
-      }
       // Filter by search term first
       if (searchTerm.trim()) {
         const search = searchTerm.trim().toLowerCase()
@@ -168,9 +139,6 @@ function WorkOrderTrackingPageContent() {
         toReschedule.push(wo)
       } else if (wo.status === 'PENDING') {
         // PENDING: Always needs validation (regardless of date)
-        if (wo.workOrderNumber === '5000428272') {
-          console.log('[Debug] Adding 5000428272 to toValidate (PENDING status)')
-        }
         toValidate.push(wo)
       } else if (wo.status === 'PLANNED' && scheduleDate < today) {
         // PLANNED with past date (CRON hasn't run yet) - needs validation
@@ -203,15 +171,6 @@ function WorkOrderTrackingPageContent() {
       try {
         const scheduleIds = categorized.toValidate.map((wo) => wo.id)
         
-        // Debug: Check if 5000428272 is in the list
-        const targetWO = categorized.toValidate.find((wo) => wo.workOrderNumber === '5000428272')
-        if (targetWO) {
-          console.log('[Debug] 5000428272 is in toValidate, fetching reports for it. Schedule ID:', targetWO.id)
-        } else {
-          console.log('[Debug] 5000428272 is NOT in toValidate array')
-          console.log('[Debug] toValidate items:', categorized.toValidate.map(wo => wo.workOrderNumber))
-        }
-        
         const response = await fetch('/api/visits/reports', {
           method: 'POST',
           headers: {
@@ -227,11 +186,6 @@ function WorkOrderTrackingPageContent() {
 
         const reports = await response.json()
         setVisitReports(reports)
-        
-        // Debug: Check if report was found for 5000428272
-        if (targetWO && reports[targetWO.id]) {
-          console.log('[Debug] Report for 5000428272:', reports[targetWO.id])
-        }
       } catch (error) {
         console.error('Error fetching visit reports:', error)
       } finally {
