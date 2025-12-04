@@ -440,8 +440,8 @@ export async function POST(request: NextRequest) {
       const findAvailableSlot = async (
         date: Date,
         zoneId: string,
-        preferredSlots: readonly string[]
-      ): Promise<string | null> => {
+        preferredSlots: readonly ('SLOT_2300' | 'SLOT_0130' | 'SLOT_0330')[]
+      ): Promise<'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330' | null> => {
         // Normalize date to start of day for comparison
         const dateStart = new Date(date)
         dateStart.setHours(0, 0, 0, 0)
@@ -457,7 +457,7 @@ export async function POST(request: NextRequest) {
                 gte: dateStart,
                 lte: dateEnd,
               },
-              timeSlot: slot,
+              timeSlot: slot as 'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330',
               status: {
                 not: 'CANCELLED',
               },
