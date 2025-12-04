@@ -105,8 +105,14 @@ export function ScheduleCalendar({
     return Array.from(new Set(keys))
   }, [fromDate, toDate, viewMode])
 
-  const getScheduleBaseDate = (schedule: any) =>
-    schedule?.r1PlannedDate ?? schedule?.lastSkippedDate ?? null
+  const getScheduleBaseDate = (schedule: any) => {
+    // For completed items: use r1PlannedDate (the planned date that was kept when marked as completed)
+    // Only fallback to updatedAt if r1PlannedDate is null (bad migration case)
+    if (schedule?.status === 'COMPLETED') {
+      return schedule?.r1PlannedDate ?? schedule?.updatedAt ?? null
+    }
+    return schedule?.r1PlannedDate ?? schedule?.lastSkippedDate ?? null
+  }
 
   // Clear pending moves when schedules data confirms the move
   useEffect(() => {

@@ -616,7 +616,11 @@ function WorkOrderTrackingPageContent() {
                             MTR Start Date
                           </th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">
-                            {activeTab === 'to_reschedule' ? 'Last Missed Date' : 'Planned Date'}
+                            {activeTab === 'to_reschedule' 
+                              ? 'Last Missed Date' 
+                              : activeTab === 'completed' 
+                              ? 'Completed Date' 
+                              : 'Planned Date'}
                           </th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase">
                             Due Date
@@ -668,6 +672,8 @@ function WorkOrderTrackingPageContent() {
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
                               {activeTab === 'to_reschedule' 
                                 ? (wo.lastSkippedDate ? new Date(wo.lastSkippedDate).toLocaleDateString() : '-')
+                                : activeTab === 'completed'
+                                ? (wo.updatedAt ? new Date(wo.updatedAt).toLocaleDateString() : '-')
                                 : (wo.r1PlannedDate ? new Date(wo.r1PlannedDate).toLocaleDateString() : '-')}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">

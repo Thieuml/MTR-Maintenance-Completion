@@ -98,6 +98,15 @@ export async function POST(request: NextRequest) {
     // Determine time slot based on equipment eligibility
     const timeSlot = equipment.canUse2300Slot ? 'SLOT_2300' : 'SLOT_0130'
 
+    // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+    const scheduledDate = new Date(wmPlannedDateObj)
+    const dueDateForLate = new Date(dueDateObj)
+    scheduledDate.setHours(0, 0, 0, 0)
+    dueDateForLate.setHours(0, 0, 0, 0)
+    const lateThreshold = new Date(dueDateForLate)
+    lateThreshold.setDate(lateThreshold.getDate() - 5)
+    const isLate = scheduledDate >= lateThreshold
+
     // Create schedule
     const schedule = await prisma.schedule.create({
       data: {
@@ -111,6 +120,7 @@ export async function POST(request: NextRequest) {
         workOrderNumber: workOrderNumber,
         mtrPlannedStartDate: mtrPlannedDateObj,
         status: 'PLANNED',
+        isLate: isLate,
       },
       include: {
         equipment: {

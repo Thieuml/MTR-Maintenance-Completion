@@ -500,6 +500,15 @@ export async function POST(request: NextRequest) {
             continue
           }
 
+          // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+          const scheduledDate = new Date(record.wmPlannedDate)
+          const dueDateObj = new Date(record.dueDate)
+          scheduledDate.setHours(0, 0, 0, 0)
+          dueDateObj.setHours(0, 0, 0, 0)
+          const lateThreshold = new Date(dueDateObj)
+          lateThreshold.setDate(lateThreshold.getDate() - 5)
+          const isLate = scheduledDate >= lateThreshold
+
           await prisma.schedule.create({
             data: {
               equipmentId: record.equipment.id,
@@ -512,6 +521,7 @@ export async function POST(request: NextRequest) {
               workOrderNumber: record.woNumber,
               mtrPlannedStartDate: record.mtrPlannedDate,
               status: 'PLANNED',
+              isLate: isLate,
             },
           })
 
@@ -577,6 +587,15 @@ export async function POST(request: NextRequest) {
           // Type assertion: availableSlot can be SLOT_0130, SLOT_0330, or SLOT_2300 (as fallback)
           const timeSlot = availableSlot as 'SLOT_0130' | 'SLOT_0330' | 'SLOT_2300'
 
+          // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+          const scheduledDate = new Date(record.wmPlannedDate)
+          const dueDateObj = new Date(record.dueDate)
+          scheduledDate.setHours(0, 0, 0, 0)
+          dueDateObj.setHours(0, 0, 0, 0)
+          const lateThreshold = new Date(dueDateObj)
+          lateThreshold.setDate(lateThreshold.getDate() - 5)
+          const isLate = scheduledDate >= lateThreshold
+
           await prisma.schedule.create({
             data: {
               equipmentId: record.equipment.id,
@@ -589,6 +608,7 @@ export async function POST(request: NextRequest) {
               workOrderNumber: record.woNumber,
               mtrPlannedStartDate: record.mtrPlannedDate,
               status: 'PLANNED',
+              isLate: isLate,
             },
           })
 

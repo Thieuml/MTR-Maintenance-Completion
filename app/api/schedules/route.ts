@@ -48,9 +48,12 @@ export async function GET(request: NextRequest) {
 
     // Only filter by r1PlannedDate if dates are provided AND status is not SKIPPED/MISSED
     // SKIPPED/MISSED items have null r1PlannedDate, so date filtering would exclude them
+    // COMPLETED items normally keep r1PlannedDate (the planned date), but migrated ones might have null r1PlannedDate
+    // For migrated COMPLETED items with null r1PlannedDate, we need to also check updatedAt as fallback
     if ((from || to) && status !== 'SKIPPED' && status !== 'MISSED') {
       const dateFilters: any[] = []
 
+      // Primary filter: by r1PlannedDate (works for normal COMPLETED items that keep their planned date)
       const plannedDateFilter: any = {}
       if (from) {
         plannedDateFilter.gte = new Date(from + 'T00:00:00Z')
@@ -60,6 +63,14 @@ export async function GET(request: NextRequest) {
       }
       if (Object.keys(plannedDateFilter).length > 0) {
         dateFilters.push({ r1PlannedDate: plannedDateFilter })
+        
+        // Fallback: include COMPLETED items with null r1PlannedDate but updatedAt in range (migrated items only)
+        const completedDateFilter: any = {
+          status: 'COMPLETED',
+          r1PlannedDate: null,
+          updatedAt: plannedDateFilter,
+        }
+        dateFilters.push(completedDateFilter)
       }
 
       const skippedDateFilter: any = { status: 'SKIPPED' }
@@ -103,6 +114,7 @@ export async function GET(request: NextRequest) {
         workOrderNumber: true,
         lastSkippedDate: true,
         skippedCount: true,
+        updatedAt: true,
         equipment: {
           select: {
             id: true,
@@ -240,6 +252,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+    let isLate = false
+    if (r1PlannedDate && dueDate) {
+      const scheduledDate = new Date(r1PlannedDate)
+      const dueDateObj = new Date(dueDate)
+      scheduledDate.setHours(0, 0, 0, 0)
+      dueDateObj.setHours(0, 0, 0, 0)
+      const lateThreshold = new Date(dueDateObj)
+      lateThreshold.setDate(lateThreshold.getDate() - 5)
+      isLate = scheduledDate >= lateThreshold
+    }
+
     // Create schedule
     const schedule = await prisma.schedule.create({
       data: {
@@ -254,6 +278,7 @@ export async function POST(request: NextRequest) {
         rotatingEngineerId: data.rotatingEngineerId || null,
         workOrderNumber: workOrderNumber || null,
         status: data.status || 'PLANNED',
+        isLate: isLate,
       },
       include: {
         equipment: {

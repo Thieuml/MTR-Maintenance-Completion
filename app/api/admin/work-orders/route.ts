@@ -189,6 +189,15 @@ export async function POST(request: NextRequest) {
       const dueDate = new Date(r0PlannedDate)
       dueDate.setDate(dueDate.getDate() + 14)
 
+      // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+      const scheduledDate = new Date(r1PlannedDate)
+      const dueDateObj = new Date(dueDate)
+      scheduledDate.setHours(0, 0, 0, 0)
+      dueDateObj.setHours(0, 0, 0, 0)
+      const lateThreshold = new Date(dueDateObj)
+      lateThreshold.setDate(lateThreshold.getDate() - 5)
+      const isLate = scheduledDate >= lateThreshold
+
       const newSchedule = await prisma.schedule.create({
         data: {
           equipmentId,
@@ -200,6 +209,7 @@ export async function POST(request: NextRequest) {
           timeSlot: 'SLOT_0130', // Default
           workOrderNumber,
           status: 'PLANNED',
+          isLate: isLate,
         },
         include: {
           equipment: {

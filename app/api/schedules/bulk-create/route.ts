@@ -131,6 +131,15 @@ export async function POST(request: NextRequest) {
           })
 
           if (!existing) {
+            // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
+            const scheduledDate = new Date(r1PlannedDate)
+            const dueDateObj = new Date(dueDate)
+            scheduledDate.setHours(0, 0, 0, 0)
+            dueDateObj.setHours(0, 0, 0, 0)
+            const lateThreshold = new Date(dueDateObj)
+            lateThreshold.setDate(lateThreshold.getDate() - 5)
+            const isLate = scheduledDate >= lateThreshold
+
             schedulesToCreate.push({
               equipmentId: eq.id,
               zoneId: eq.zoneId,
@@ -141,6 +150,7 @@ export async function POST(request: NextRequest) {
               timeSlot,
               workOrderNumber: workOrderNumbers[orNumberIndex] || generateDummyORNumbers(1)[0],
               status: 'PLANNED',
+              isLate: isLate,
             })
             orNumberIndex++
           }
