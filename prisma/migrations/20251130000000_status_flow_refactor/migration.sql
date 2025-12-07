@@ -140,10 +140,6 @@ SET "isLate" = CASE
           AND "Schedule"."mtrPlannedStartDate" IS NOT NULL
           AND mv."completionDate" > "Schedule"."mtrPlannedStartDate" + INTERVAL '6 days'
       ) THEN true
-      WHEN "completionDate" IS NOT NULL 
-        AND "mtrPlannedStartDate" IS NOT NULL
-        AND "completionDate" > "mtrPlannedStartDate" + INTERVAL '6 days'
-      THEN true
       ELSE false
     END
 WHERE status = 'COMPLETED' AND "isLate" = false;
