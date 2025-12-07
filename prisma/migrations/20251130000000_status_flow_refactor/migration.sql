@@ -74,33 +74,61 @@ BEGIN
 END $$;
 
 -- Step 5: Migrate TO_RESCHEDULE → SKIPPED (if dueDate >= today) or MISSED (if dueDate < today)
-UPDATE "Schedule"
-SET status = CASE 
-      WHEN "dueDate" >= CURRENT_DATE THEN 'SKIPPED'
-      ELSE 'MISSED'
-    END,
-    "lastSkippedDate" = "r1PlannedDate",
-    "r1PlannedDate" = NULL,
-    "skippedCount" = CASE 
-      WHEN "dueDate" >= CURRENT_DATE THEN 1
-      ELSE 0
-    END
-WHERE status = 'TO_RESCHEDULE';
+-- Wrapped in conditional block to handle case where TO_RESCHEDULE no longer exists
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'TO_RESCHEDULE' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'ScheduleStatus')
+    ) THEN
+        UPDATE "Schedule"
+        SET status = CASE 
+              WHEN "dueDate" >= CURRENT_DATE THEN 'SKIPPED'
+              ELSE 'MISSED'
+            END,
+            "lastSkippedDate" = "r1PlannedDate",
+            "r1PlannedDate" = NULL,
+            "skippedCount" = CASE 
+              WHEN "dueDate" >= CURRENT_DATE THEN 1
+              ELSE 0
+            END
+        WHERE status = 'TO_RESCHEDULE';
+    END IF;
+END $$;
 
 -- Step 6: Migrate IN_PROGRESS → PENDING (if past date) or PLANNED (if future date)
-UPDATE "Schedule"
-SET status = CASE 
-      WHEN "r1PlannedDate" < CURRENT_DATE THEN 'PENDING'
-      ELSE 'PLANNED'
-    END
-WHERE status = 'IN_PROGRESS';
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'IN_PROGRESS' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'ScheduleStatus')
+    ) THEN
+        UPDATE "Schedule"
+        SET status = CASE 
+              WHEN "r1PlannedDate" < CURRENT_DATE THEN 'PENDING'
+              ELSE 'PLANNED'
+            END
+        WHERE status = 'IN_PROGRESS';
+    END IF;
+END $$;
 
 -- Step 7: Migrate OVERDUE → MISSED
-UPDATE "Schedule"
-SET status = 'MISSED',
-    "lastSkippedDate" = "r1PlannedDate",
-    "r1PlannedDate" = NULL
-WHERE status = 'OVERDUE';
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'OVERDUE' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'ScheduleStatus')
+    ) THEN
+        UPDATE "Schedule"
+        SET status = 'MISSED',
+            "lastSkippedDate" = "r1PlannedDate",
+            "r1PlannedDate" = NULL
+        WHERE status = 'OVERDUE';
+    END IF;
+END $$;
 
 -- Step 8: Calculate isLate for existing COMPLETED items
 UPDATE "Schedule"
