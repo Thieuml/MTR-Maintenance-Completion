@@ -172,6 +172,9 @@ model Schedule {
   // Status tracking
   status ScheduleStatus @default(PLANNED)
 
+  // Completion tracking
+  completionDate DateTime? // Actual date when work was completed (set when status → COMPLETED)
+
   // Late completion flag
   isLate Boolean @default(false) // true if completionDate > mtrPlannedStartDate + 6 days (for COMPLETED)
   // or if r1PlannedDate > mtrPlannedStartDate + 6 days (for PLANNED)
@@ -194,6 +197,7 @@ model Schedule {
   @@index([r1PlannedDate])
   @@index([dueDate])
   @@index([status, updatedAt]) // Optimize queries filtering by status and date
+  @@index([status, completionDate]) // Optimize analytics queries by completion date
   @@index([workOrderNumber, status]) // Optimize work order queries
 }
 

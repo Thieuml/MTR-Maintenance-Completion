@@ -36,6 +36,7 @@ export function Navigation() {
   const navItems = [
     { href: '/schedule', label: 'Schedule', badge: null },
     { href: '/work-order-tracking', label: 'Work Order Tracking', badge: badgeCount },
+    { href: '/analytics', label: 'Analytics', badge: null },
     { href: '/dashboard', label: 'Dashboard', badge: null },
     { href: '/admin', label: 'Admin', badge: null },
   ]

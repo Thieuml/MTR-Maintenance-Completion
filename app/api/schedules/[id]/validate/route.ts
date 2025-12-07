@@ -66,8 +66,11 @@ export async function POST(
 
     // Update schedule based on action
     let updateData: any = {}
+    let rescheduleRecord: any = null
+    
     if (action === 'completed') {
       updateData.status = 'COMPLETED' as const
+      updateData.completionDate = schedule.r1PlannedDate // Set to scheduled date
       updateData.isLate = isLate
     } else if (action === 'to_reschedule') {
       // Determine if MISSED (dueDate passed) or SKIPPED (dueDate still in future)
@@ -89,6 +92,17 @@ export async function POST(
           updateData.lastSkippedDate = schedule.r1PlannedDate || null
           updateData.r1PlannedDate = null // Empty scheduled date
           updateData.skippedCount = { increment: 1 } // Increment skipped count
+          
+          // Create Reschedule record for tracking
+          if (schedule.r1PlannedDate) {
+            rescheduleRecord = {
+              scheduleId: schedule.id,
+              originalDate: schedule.r1PlannedDate, // Date it was scheduled for before skip
+              newDate: schedule.r1PlannedDate, // Placeholder - will be updated when rescheduled
+              reason: 'Skipped during validation',
+              status: 'PENDING' as const,
+            }
+          }
         }
       } else {
         // No dueDate - default to SKIPPED
@@ -96,24 +110,48 @@ export async function POST(
         updateData.lastSkippedDate = schedule.r1PlannedDate || null
         updateData.r1PlannedDate = null
         updateData.skippedCount = { increment: 1 }
+        
+        // Create Reschedule record for tracking
+        if (schedule.r1PlannedDate) {
+          rescheduleRecord = {
+            scheduleId: schedule.id,
+            originalDate: schedule.r1PlannedDate,
+            newDate: schedule.r1PlannedDate, // Placeholder
+            reason: 'Skipped during validation',
+            status: 'PENDING' as const,
+          }
+        }
       }
     }
 
-    // Update schedule (minimal select for performance - only return what's needed)
-    const updated = await prisma.schedule.update({
-      where: { id: scheduleId },
-      data: updateData,
-      select: {
-        id: true,
-        status: true,
-        r1PlannedDate: true,
-        lastSkippedDate: true,
-        skippedCount: true,
-        isLate: true,
-      },
+    // Update schedule and create reschedule record in transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Update schedule
+      const updated = await tx.schedule.update({
+        where: { id: scheduleId },
+        data: updateData,
+        select: {
+          id: true,
+          status: true,
+          r1PlannedDate: true,
+          completionDate: true,
+          lastSkippedDate: true,
+          skippedCount: true,
+          isLate: true,
+        },
+      })
+      
+      // Create reschedule record if needed
+      if (rescheduleRecord) {
+        await tx.reschedule.create({
+          data: rescheduleRecord,
+        })
+      }
+      
+      return updated
     })
 
-    return NextResponse.json({ schedule: updated })
+    return NextResponse.json({ schedule: result })
   } catch (error) {
     console.error('[Schedule Validate] Error:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)

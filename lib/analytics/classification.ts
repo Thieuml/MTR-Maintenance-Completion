@@ -60,8 +60,10 @@ export function classifyMaintenance(input: ClassificationInput): MaintenanceClas
 }
 
 /**
- * Calculate planning deviation (days between WM Start Date and MTR Start Date)
+ * Calculate planning deviation for rescheduled items
+ * Formula: Currently Scheduled Date (r1PlannedDate) - MTR Planned Start Date
  * Returns 0 or positive (no negative values)
+ * This shows how many days the rescheduled date deviates from the original MTR plan
  */
 export function calculatePlanningDeviation(
   r1PlannedDate: Date,

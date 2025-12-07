@@ -666,18 +666,18 @@ function WorkOrderTrackingPageContent() {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
                               {wo.mtrPlannedStartDate
-                                ? new Date(wo.mtrPlannedStartDate).toLocaleDateString()
+                                ? new Date(wo.mtrPlannedStartDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' })
                                 : '-'}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
                               {activeTab === 'to_reschedule' 
-                                ? (wo.lastSkippedDate ? new Date(wo.lastSkippedDate).toLocaleDateString() : '-')
+                                ? (wo.lastSkippedDate ? new Date(wo.lastSkippedDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-')
                                 : activeTab === 'completed'
-                                ? (wo.updatedAt ? new Date(wo.updatedAt).toLocaleDateString() : '-')
-                                : (wo.r1PlannedDate ? new Date(wo.r1PlannedDate).toLocaleDateString() : '-')}
+                                ? (wo.updatedAt ? new Date(wo.updatedAt).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-')
+                                : (wo.r1PlannedDate ? new Date(wo.r1PlannedDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-')}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
-                              {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : '-'}
+                              {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-'}
                             </td>
                             {activeTab === 'to_validate' && (
                               <td className="px-4 py-3 text-sm text-center">
