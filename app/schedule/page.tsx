@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSchedule, useZones } from '@/lib/hooks'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
 import { Navigation } from '@/components/shared/Navigation'
+import { getHKTDateKey } from '@/lib/utils/timezone'
 
 type ViewMode = 'week' | 'month'
 
@@ -12,6 +13,44 @@ export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<ViewMode>('week')
   const [dateOffset, setDateOffset] = useState(0) // Offset in weeks or months
   const [isEditMode, setIsEditMode] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const exportModalRef = useRef<HTMLDivElement>(null)
+  const [exportStartWeek, setExportStartWeek] = useState<string>(() => {
+    // Default to following week (next Sunday)
+    const today = new Date()
+    const dayOfWeek = today.getDay()
+    const currentWeekStart = new Date(today)
+    currentWeekStart.setDate(today.getDate() - dayOfWeek)
+    // Add 7 days to get next Sunday
+    const nextWeekStart = new Date(currentWeekStart)
+    nextWeekStart.setDate(currentWeekStart.getDate() + 7)
+    nextWeekStart.setHours(0, 0, 0, 0)
+    return getHKTDateKey(nextWeekStart)
+  })
+  const [exportNumWeeks, setExportNumWeeks] = useState<number>(4)
+  const [exportSelectedZones, setExportSelectedZones] = useState<string[]>([])
+
+  // Close modal when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showExportModal &&
+        exportModalRef.current &&
+        !exportModalRef.current.contains(event.target as Node)
+      ) {
+        setShowExportModal(false)
+      }
+    }
+
+    if (showExportModal) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showExportModal])
 
   const { zones } = useZones()
 
@@ -101,6 +140,59 @@ export default function SchedulePage() {
     ? zones.filter((z: any) => z.id === selectedZoneId)
     : zones
 
+  // Handle PDF export
+  const handleExportPDF = async () => {
+    setIsExporting(true)
+    setShowExportModal(false)
+    try {
+      const params = new URLSearchParams({
+        startWeek: exportStartWeek,
+        numWeeks: exportNumWeeks.toString(),
+      })
+      if (exportSelectedZones.length > 0) {
+        params.append('zones', exportSelectedZones.join(','))
+      }
+      const response = await fetch(`/api/schedules/export/pdf?${params.toString()}`)
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `mtr-schedule-${exportStartWeek}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Error exporting PDF:', error)
+      alert('Failed to export PDF. Please try again.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // Handle zone selection toggle
+  const handleZoneToggle = (zoneId: string) => {
+    setExportSelectedZones((prev) => {
+      if (prev.includes(zoneId)) {
+        return prev.filter((id) => id !== zoneId)
+      } else {
+        return [...prev, zoneId]
+      }
+    })
+  }
+
+  // Handle select all zones
+  const handleSelectAllZones = () => {
+    if (exportSelectedZones.length === zones.length) {
+      setExportSelectedZones([])
+    } else {
+      setExportSelectedZones(zones.map((z: any) => z.id))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -186,6 +278,14 @@ export default function SchedulePage() {
               >
                 Next →
               </button>
+              
+              {/* Export PDF Button */}
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Export PDF
+              </button>
             </div>
           </div>
 
@@ -230,6 +330,101 @@ export default function SchedulePage() {
         </div>
         </div>
       </main>
+
+      {/* Export PDF Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div ref={exportModalRef} className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Export Schedule to PDF</h2>
+            
+            <div className="mb-4">
+              <label htmlFor="export-week-date" className="block text-sm font-medium text-gray-700 mb-2">
+                Starting Week (Sunday)
+              </label>
+              <input
+                id="export-week-date"
+                type="date"
+                value={exportStartWeek}
+                onChange={(e) => setExportStartWeek(e.target.value)}
+                className="w-full px-3 py-2 text-base border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="export-num-weeks" className="block text-sm font-medium text-gray-700 mb-2">
+                Number of Weeks (1-4)
+              </label>
+              <input
+                id="export-num-weeks"
+                type="number"
+                min="1"
+                max="4"
+                value={exportNumWeeks}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10)
+                  if (value >= 1 && value <= 4) {
+                    setExportNumWeeks(value)
+                  }
+                }}
+                className="w-full px-3 py-2 text-base border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Zones to Include
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSelectAllZones}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {exportSelectedZones.length === zones.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+              <div className="border border-gray-300 rounded-md p-3 max-h-48 overflow-y-auto">
+                {zones.length === 0 ? (
+                  <p className="text-sm text-gray-500">No zones available</p>
+                ) : (
+                  zones.map((zone: any) => (
+                    <label key={zone.id} className="flex items-center mb-2 last:mb-0 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={exportSelectedZones.length === 0 || exportSelectedZones.includes(zone.id)}
+                        onChange={() => handleZoneToggle(zone.id)}
+                        className="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-900">
+                        {zone.code} - {zone.name}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+              {exportSelectedZones.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">All zones will be included by default</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isExporting ? 'Exporting...' : 'Export PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
