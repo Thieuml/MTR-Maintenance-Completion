@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma migrate deploy && npm run build",
+  "buildCommand": "prisma migrate resolve --rolled-back 20251130000000_status_flow_refactor && prisma migrate deploy && npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
