@@ -15,23 +15,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
     // Get counts efficiently with aggregation
     // This is much faster than fetching all work orders
+    // Trust the database status as single source of truth (no date calculations)
     const [toValidateCount, toRescheduleCount] = await Promise.all([
-      // PENDING items or PLANNED with past dates
+      // PENDING items (cron job moves PLANNED → PENDING for past dates)
       prisma.schedule.count({
         where: {
           workOrderNumber: { not: null },
-          OR: [
-            { status: 'PENDING' },
-            {
-              status: 'PLANNED',
-              r1PlannedDate: { lt: today },
-            },
-          ],
+          status: 'PENDING',
         },
       }),
       // SKIPPED or MISSED items

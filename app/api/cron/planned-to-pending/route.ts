@@ -35,11 +35,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current date in HKT
+    // Convert server time (UTC on Vercel) to HKT to get the correct date components
     const now = new Date()
+    const hktString = now.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' })
+    const hktDate = new Date(hktString)
+    
+    // Create midnight today in HKT
     const hktNow = createHKTDate(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      now.getDate(),
+      hktDate.getFullYear(),
+      hktDate.getMonth() + 1,
+      hktDate.getDate(),
       0,
       0
     )

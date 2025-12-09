@@ -77,12 +77,10 @@ export function createHKTDate(
   hour: number = 0,
   minute: number = 0
 ): Date {
-  // Create date string in HKT format
-  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`
-  
-  // Parse as if it's UTC, then adjust for HKT offset
-  const utcDate = new Date(dateStr + 'Z')
-  return new Date(utcDate.getTime() - HKT_OFFSET)
+  // Create date string with explicit HKT timezone offset (+08:00)
+  // JavaScript automatically converts this to the correct UTC timestamp
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+08:00`
+  return new Date(dateStr)
 }
 
 /**

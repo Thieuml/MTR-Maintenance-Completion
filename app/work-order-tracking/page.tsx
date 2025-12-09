@@ -90,9 +90,6 @@ function WorkOrderTrackingPageContent() {
 
   // Filter and categorize work orders
   const categorized = useMemo(() => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
     const toValidate: WorkOrder[] = []
     const toReschedule: WorkOrder[] = []
     const completed: WorkOrder[] = []
@@ -110,39 +107,15 @@ function WorkOrderTrackingPageContent() {
         }
       }
 
-      // Categorize based on status and date (using new status flow)
-      // Check COMPLETED first (before accessing r1PlannedDate which might be null)
+      // Categorize based on database status (single source of truth)
       if (wo.status === 'COMPLETED') {
         completed.push(wo)
-        return // Skip date checks for completed items
-      }
-
-      // For other statuses, check r1PlannedDate (might be null for SKIPPED/MISSED)
-      if (!wo.r1PlannedDate) {
-        // Items without scheduled date: SKIPPED or MISSED
-        if (wo.status === 'MISSED' || wo.status === 'SKIPPED') {
-          toReschedule.push(wo)
-        } else if (wo.status === 'PENDING') {
-          toValidate.push(wo)
-        }
-        return
-      }
-
-      // Items with scheduled date
-      const scheduleDate = new Date(wo.r1PlannedDate)
-      scheduleDate.setHours(0, 0, 0, 0)
-      const dueDate = wo.dueDate ? new Date(wo.dueDate) : null
-      if (dueDate) dueDate.setHours(0, 0, 0, 0)
-
-      if (wo.status === 'MISSED' || wo.status === 'SKIPPED') {
+      } else if (wo.status === 'PENDING') {
+        // PENDING: Awaits validation (cron job moved it from PLANNED)
+        toValidate.push(wo)
+      } else if (wo.status === 'MISSED' || wo.status === 'SKIPPED') {
         // MISSED or SKIPPED - needs rescheduling
         toReschedule.push(wo)
-      } else if (wo.status === 'PENDING') {
-        // PENDING: Always needs validation (regardless of date)
-        toValidate.push(wo)
-      } else if (wo.status === 'PLANNED' && scheduleDate < today) {
-        // PLANNED with past date (CRON hasn't run yet) - needs validation
-        toValidate.push(wo)
       } else if (wo.status === 'PLANNED') {
         // Check if PLANNED item is at risk (r1PlannedDate >= dueDate - 5 days)
         if (isAtRisk(wo.r1PlannedDate, wo.dueDate, wo.status)) {
@@ -666,18 +639,18 @@ function WorkOrderTrackingPageContent() {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
                               {wo.mtrPlannedStartDate
-                                ? new Date(wo.mtrPlannedStartDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' })
+                                ? new Date(wo.mtrPlannedStartDate).toLocaleDateString()
                                 : '-'}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
                               {activeTab === 'to_reschedule' 
-                                ? (wo.lastSkippedDate ? new Date(wo.lastSkippedDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-')
+                                ? (wo.lastSkippedDate ? new Date(wo.lastSkippedDate).toLocaleDateString() : '-')
                                 : activeTab === 'completed'
-                                ? (wo.updatedAt ? new Date(wo.updatedAt).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-')
-                                : (wo.r1PlannedDate ? new Date(wo.r1PlannedDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-')}
+                                ? (wo.updatedAt ? new Date(wo.updatedAt).toLocaleDateString() : '-')
+                                : (wo.r1PlannedDate ? new Date(wo.r1PlannedDate).toLocaleDateString() : '-')}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 text-center">
-                              {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString('en-US', { timeZone: 'Asia/Hong_Kong' }) : '-'}
+                              {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : '-'}
                             </td>
                             {activeTab === 'to_validate' && (
                               <td className="px-4 py-3 text-sm text-center">

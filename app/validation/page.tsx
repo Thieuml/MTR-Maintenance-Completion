@@ -30,22 +30,14 @@ export default function ValidationPage() {
   const { schedules, isLoading, mutate } = useSchedule(undefined, from, to)
 
   // Filter schedules that need validation:
-  // - Status is PENDING (past dates awaiting validation)
-  // - OR status is PLANNED with past r1PlannedDate (not yet transitioned by CRON)
+  // Trust the database status - PENDING items await validation
   const pendingSchedules = useMemo(() => {
     return schedules.filter((schedule: any) => {
-      if (schedule.status === 'PENDING') {
-        return true
-      }
-      // Also show PLANNED items with past dates (CRON hasn't run yet)
-      if (schedule.status === 'PLANNED' && schedule.r1PlannedDate) {
-        const scheduleDate = new Date(schedule.r1PlannedDate)
-        scheduleDate.setHours(0, 0, 0, 0)
-        return scheduleDate < today
-      }
-      return false
+      // Only show items with PENDING status
+      // The cron job is responsible for transitioning PLANNED → PENDING daily
+      return schedule.status === 'PENDING'
     })
-  }, [schedules, today])
+  }, [schedules])
 
   // Fetch visit reports when pending schedules change
   useEffect(() => {

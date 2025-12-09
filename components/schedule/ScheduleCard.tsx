@@ -53,11 +53,11 @@ export function ScheduleCard({ schedule, onClick, isDragging, isEditMode = false
     opacity: isDragging ? 0.5 : 1,
   }
 
-  // Get validation status - must match logic in work-order-tracking/page.tsx
+  // Get validation status - trust the database status as single source of truth
   const getValidationStatus = () => {
     if (schedule.status === 'COMPLETED' || schedule.status === 'COMPLETED_LATE') return 'completed'
 
-    // SKIPPED items need rescheduling (legacy TO_RESCHEDULE flag no longer used)
+    // SKIPPED items need rescheduling
     if (schedule.status === 'SKIPPED') {
       return 'to_reschedule'
     }
@@ -67,20 +67,13 @@ export function ScheduleCard({ schedule, onClick, isDragging, isEditMode = false
       return null
     }
 
-    // Don't show pending for future schedules
-    const scheduleDate = new Date(schedule.r1PlannedDate)
-    scheduleDate.setHours(0, 0, 0, 0)
-    
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    // Only show pending if the schedule date is in the past (not today, not future)
-    if (scheduleDate >= today) {
-      return null // Don't show status for today or future schedules
+    // PENDING items await validation
+    if (schedule.status === 'PENDING') {
+      return 'pending'
     }
-    
-    // Past date that hasn't been validated yet
-    return 'pending'
+
+    // PLANNED and other statuses don't show a badge
+    return null
   }
 
   const validationStatus = getValidationStatus()

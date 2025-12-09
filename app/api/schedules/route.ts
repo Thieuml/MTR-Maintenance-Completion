@@ -56,7 +56,11 @@ export async function GET(request: NextRequest) {
       // Primary filter: by r1PlannedDate (works for normal COMPLETED items that keep their planned date)
       const plannedDateFilter: any = {}
       if (from) {
-        plannedDateFilter.gte = new Date(from + 'T00:00:00Z')
+        // Subtract one day to ensure we capture all HKT times that span into previous UTC day
+        // E.g., Dec 9 00:00-07:59 HKT is stored as Dec 8 16:00-23:59 UTC
+        const fromDate = new Date(from + 'T00:00:00Z')
+        fromDate.setUTCDate(fromDate.getUTCDate() - 1)
+        plannedDateFilter.gte = fromDate
       }
       if (to) {
         plannedDateFilter.lte = new Date(to + 'T23:59:59.999Z')
@@ -76,7 +80,10 @@ export async function GET(request: NextRequest) {
       const skippedDateFilter: any = { status: 'SKIPPED' }
       const skippedRange: any = {}
       if (from) {
-        skippedRange.gte = new Date(from + 'T00:00:00Z')
+        // Subtract one day for same reason as plannedDateFilter
+        const fromDate = new Date(from + 'T00:00:00Z')
+        fromDate.setUTCDate(fromDate.getUTCDate() - 1)
+        skippedRange.gte = fromDate
       }
       if (to) {
         skippedRange.lte = new Date(to + 'T23:59:59.999Z')

@@ -62,7 +62,7 @@ function ReschedulePageContent() {
   // Get schedules for the selected zone only - fixes zone filtering issue
   // Only fetch schedules if we have a selected schedule (to get the zone)
   const selectedZoneId = selectedSchedule?.zone?.id || selectedSchedule?.zoneId
-  const { schedules: allSchedules, isLoading: isLoadingAllSchedules } = useSchedule(
+  const { schedules: allSchedules, isLoading: isLoadingAllSchedules, mutate: mutateAllSchedules } = useSchedule(
     selectedZoneId || undefined, // Filter by zone - CRITICAL FIX
     selectedSchedule ? todayKey : undefined,
     selectedSchedule ? futureKey : undefined
@@ -82,7 +82,9 @@ function ReschedulePageContent() {
       return (
         scheduleZoneId === selectedZoneId &&
         s.r1PlannedDate &&
-        s.id !== selectedSchedule.id
+        s.id !== selectedSchedule.id &&
+        // Only count PLANNED or PENDING schedules as occupying slots
+        (s.status === 'PLANNED' || s.status === 'PENDING')
       )
     })
 
@@ -206,8 +208,26 @@ function ReschedulePageContent() {
         return
       }
 
-      // Redirect back to Work Order Tracking page
-      router.push('/work-order-tracking?tab=to_reschedule')
+      // Success! Refresh the cache to show updated slot availability
+      // Wait for both mutations to complete before continuing
+      await Promise.all([
+        mutate(), // Refresh MISSED/SKIPPED list
+        mutateAllSchedules(), // Refresh slot availability
+      ])
+      
+      // Show success message
+      alert('Successfully rescheduled!')
+      
+      // Reset selection to allow rescheduling another item
+      setSelectedScheduleId(null)
+      setSelectedDate('')
+      setSelectedTimeSlot('')
+      setWarning('')
+      
+      // If user came from a direct link, redirect back
+      if (scheduleIdFromUrl) {
+        router.push('/work-order-tracking?tab=to_reschedule')
+      }
     } catch (error) {
       console.error('Error rescheduling:', error)
       alert('Failed to reschedule. Please try again.')
