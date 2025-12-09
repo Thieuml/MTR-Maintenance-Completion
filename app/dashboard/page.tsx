@@ -1,701 +1,1114 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Navigation } from '@/components/shared/Navigation'
 import { useZones } from '@/lib/hooks'
 import useSWR from 'swr'
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
-interface AnalyticsSummary {
-  total: number
-  totalDue: number // Total work orders with due date in the past
-  completed: number
-  completedDue: number // Completed work orders with due date in the past
-  missed: number
-  onTime: number
-  late: number
-  completionRate: number
-  onTimeRate: number
-  avgPlanningDeviation: number | null
-  avgExecutionDeviation: number | null
-}
+type IndicatorId = '1' | '2' | '3' | '4'
 
-interface GroupedData {
-  [key: string]: {
-    key: string
-    total: number
-    completed: number
-    missed: number
-    onTime: number
-    late: number
-    completionRate: number
-    onTimeRate: number
-    avgPlanningDeviation: number | null
-    avgExecutionDeviation: number | null
-  }
-}
-
-interface WorkOrderDetail {
-  scheduleId: string
-  equipmentNumber: string
-  zoneCode: string
-  r1PlannedDate: string
-  dueDate?: string | null
-  completionDate?: string | null
-  executionDeviation?: number | null
-  planningDeviation?: number | null
-  mtrPlannedStartDate?: string | null
-  workOrderNumber?: string | null
-}
-
-interface AnalyticsDetails {
-  missedWorkOrders: WorkOrderDetail[]
-  lateWorkOrders: WorkOrderDetail[]
-  planningDeviationWorkOrders?: WorkOrderDetail[]
-  executionDeviationWorkOrders?: WorkOrderDetail[]
-}
-
-export default function DashboardPage() {
+export default function AnalyticsPage() {
   const { zones } = useZones()
-  const [selectedZone, setSelectedZone] = useState<string>('all')
-  const [selectedBatch, setSelectedBatch] = useState<'A' | 'B' | 'all'>('all')
-  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'batch' | 'zone'>('month')
-  const [dateRange, setDateRange] = useState({
-    from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days ago
-    to: new Date().toISOString().split('T')[0], // today
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('')
+  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorId | null>(null)
+  
+  // Month selection - default logic: before 5th = last month, after 5th = current month
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const today = new Date()
+    const dayOfMonth = today.getDate()
+    
+    if (dayOfMonth < 5) {
+      // Show last month
+      const lastMonth = new Date(today)
+      lastMonth.setMonth(today.getMonth() - 1)
+      const year = lastMonth.getFullYear()
+      const month = String(lastMonth.getMonth() + 1).padStart(2, '0')
+      return `${year}-${month}`
+    } else {
+      // Show current month
+      const year = today.getFullYear()
+      const month = String(today.getMonth() + 1).padStart(2, '0')
+      return `${year}-${month}`
+    }
   })
 
-  // Build API URL
-  const buildApiUrl = () => {
-    const params = new URLSearchParams()
-    if (dateRange.from) params.append('from', dateRange.from)
-    if (dateRange.to) params.append('to', dateRange.to)
-    if (selectedZone !== 'all') params.append('zoneId', selectedZone)
-    if (selectedBatch !== 'all') params.append('batch', selectedBatch)
-    if (selectedPeriod) params.append('period', selectedPeriod)
-    return `/api/analytics/maintenance?${params.toString()}`
-  }
+  // Reset selected indicator when month or zone changes
+  useEffect(() => {
+    setSelectedIndicator(null)
+  }, [selectedMonth, selectedZoneId])
 
-  const { data, error, isLoading } = useSWR<{
-    summary: AnalyticsSummary
-    grouped: GroupedData | null
-    details: AnalyticsDetails
-  }>(buildApiUrl(), fetcher)
+  // Calculate start and end dates from selected month
+  const { startDate, endDate } = useMemo(() => {
+    const [year, month] = selectedMonth.split('-').map(Number)
+    
+    // Create dates at midnight local time to avoid timezone issues
+    const start = new Date(year, month - 1, 1)
+    const end = new Date(year, month, 0) // Last day of month
+    
+    // Format as YYYY-MM-DD in local timezone
+    const formatLocalDate = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
+    
+    return {
+      startDate: formatLocalDate(start),
+      endDate: formatLocalDate(end),
+    }
+  }, [selectedMonth])
 
-  // Always provide default values to ensure structure is shown
-  const summary: AnalyticsSummary = data?.summary || {
-    total: 0,
-    totalDue: 0,
-    completed: 0,
-    completedDue: 0,
-    missed: 0,
-    onTime: 0,
-    late: 0,
-    completionRate: 0,
-    onTimeRate: 0,
-    avgPlanningDeviation: null,
-    avgExecutionDeviation: null,
-  }
-  const grouped = data?.grouped
-  const details: AnalyticsDetails = data?.details || {
-    missedWorkOrders: [],
-    lateWorkOrders: [],
-    planningDeviationWorkOrders: [],
-    executionDeviationWorkOrders: [],
-  }
+  // Build API URL - always fetch, optionally include details
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      startDate,
+      endDate,
+    })
+    if (selectedZoneId) {
+      params.append('zoneId', selectedZoneId)
+    }
+    if (selectedIndicator) {
+      params.append('includeDetails', selectedIndicator)
+    }
+    return `/api/analytics/kpi?${params.toString()}`
+  }, [startDate, endDate, selectedZoneId, selectedIndicator])
 
-  // Expandable sections state
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
-  const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set())
+  const { data, error, isLoading } = useSWR(apiUrl, fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    keepPreviousData: true, // Keep previous data visible while loading new data
+    dedupingInterval: 0,
+  })
+
+  // Check if current data matches the selected filters (to handle stale data during month/zone changes)
+  const isDataStale = data && data.period && (
+    data.period.startDate !== startDate || 
+    data.period.endDate !== endDate
+  )
   
-  const toggleSection = (section: string) => {
-    const newExpanded = new Set(expandedSections)
-    if (newExpanded.has(section)) {
-      newExpanded.delete(section)
-    } else {
-      newExpanded.add(section)
-    }
-    setExpandedSections(newExpanded)
-  }
+  // Show loading if data is stale or actually loading
+  const effectivelyLoading = isLoading || isDataStale
 
-  const toggleDetails = (indicator: string) => {
-    const newExpanded = new Set(expandedDetails)
-    if (newExpanded.has(indicator)) {
-      newExpanded.delete(indicator)
-    } else {
-      newExpanded.add(indicator)
+  // Generate list of available months (up to current month)
+  const availableMonths = useMemo(() => {
+    const months: Array<{ value: string; label: string }> = []
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth()
+
+    // Go back 12 months from current month
+    for (let i = 0; i <= 12; i++) {
+      const date = new Date(currentYear, currentMonth - i, 1)
+      
+      // Format value in local timezone (not UTC) to match our date calculations
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const value = `${year}-${month}`
+      
+      const label = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      months.push({ value, label })
     }
-    setExpandedDetails(newExpanded)
-  }
+
+    return months
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="ml-64 overflow-auto p-6">
         <div className="max-w-7xl mx-auto">
+          {/* Header */}
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Maintenance Analytics Dashboard</h1>
-            <p className="text-gray-600">Track maintenance completion performance and key indicators</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
+            <p className="text-sm text-gray-600">
+              Key Performance Indicators for preventive maintenance operations
+            </p>
           </div>
 
           {/* Filters */}
-          <div className="mb-6 bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
-                <input
-                  type="date"
-                  value={dateRange.from}
-                  onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-                  className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
-                <input
-                  type="date"
-                  value={dateRange.to}
-                  onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-                  className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zone</label>
+                <label htmlFor="month" className="block text-sm font-medium text-gray-700 mb-1">
+                  Month
+                </label>
                 <select
-                  value={selectedZone}
-                  onChange={(e) => setSelectedZone(e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  id="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="all">All Zones</option>
-                  {zones.map((zone: { id: string; code: string }) => (
-                    <option key={zone.id} value={zone.id}>
-                      {zone.code}
+                  {availableMonths.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
                     </option>
                   ))}
                 </select>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Batch</label>
+                <label htmlFor="zone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Zone
+                </label>
                 <select
-                  value={selectedBatch}
-                  onChange={(e) => setSelectedBatch(e.target.value as 'A' | 'B' | 'all')}
-                  className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  id="zone"
+                  value={selectedZoneId}
+                  onChange={(e) => setSelectedZoneId(e.target.value)}
+                  className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="all">All Batches</option>
-                  <option value="A">Batch A</option>
-                  <option value="B">Batch B</option>
+                  <option value="">All Zones</option>
+                  {zones.map((zone: any) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.code} - {zone.name}
+                    </option>
+                  ))}
                 </select>
               </div>
-            </div>
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Group By</label>
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value as 'month' | 'batch' | 'zone')}
-                className="w-full md:w-auto px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="month">By Month</option>
-                <option value="batch">By 2-Week Period (Batch)</option>
-                <option value="zone">By Zone</option>
-              </select>
+
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    const today = new Date()
+                    const dayOfMonth = today.getDate()
+                    
+                    if (dayOfMonth < 5) {
+                      const lastMonth = new Date(today)
+                      lastMonth.setMonth(today.getMonth() - 1)
+                      const year = lastMonth.getFullYear()
+                      const month = String(lastMonth.getMonth() + 1).padStart(2, '0')
+                      setSelectedMonth(`${year}-${month}`)
+                    } else {
+                      const year = today.getFullYear()
+                      const month = String(today.getMonth() + 1).padStart(2, '0')
+                      setSelectedMonth(`${year}-${month}`)
+                    }
+                    setSelectedZoneId('')
+                    setSelectedIndicator(null)
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Reset Filters
+                </button>
+              </div>
             </div>
           </div>
 
-          {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Loading analytics...</div>
-          ) : error ? (
-            <div className="p-8 text-center text-red-500">Error loading analytics. Please try again.</div>
-          ) : (
+          {/* Loading/Error States */}
+          {effectivelyLoading && (isDataStale || !data) && (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-gray-600">Loading analytics...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-800 font-medium">Error loading analytics</p>
+              <p className="text-red-600 text-sm mt-1">{error.message}</p>
+            </div>
+          )}
+
+          {/* KPI Summary Cards - Top Row */}
+          {data && data.indicator1_asPlannedCompletion && !isDataStale && (
             <>
-              {/* Key Indicators - 4 Sections */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                {/* Indicator 1: Completion Rate */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      1. Maintenance Completion
-                    </h2>
-                    <button
-                      onClick={() => toggleDetails('completion')}
-                      className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      {expandedDetails.has('completion') ? 'Hide info' : 'See info'}
-                    </button>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                {/* Indicator 1: As-Planned Completion Rate */}
+                <button
+                  onClick={() => setSelectedIndicator(selectedIndicator === '1' ? null : '1')}
+                  className={`text-left rounded-lg shadow-sm p-4 border-l-4 transition-all ${
+                    selectedIndicator === '1'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-600 bg-white hover:border-gray-800'
+                  }`}
+                >
+                  <div className="text-xs font-medium text-gray-600 uppercase">Completion Rate</div>
+                  <div className="mt-1 text-2xl font-bold text-gray-900">
+                    {data.indicator1_asPlannedCompletion.overall.completionRate}%
                   </div>
-                  {expandedDetails.has('completion') && (
-                    <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
-                      <strong>Definition:</strong> Percentage of maintenance work orders that were completed before their Due Date.
-                      <br /><br />
-                      <strong>Calculation:</strong> (Number of completed work orders with Due Date in the past) ÷ (Total work orders with Due Date in the past) × 100
-                      <br /><br />
-                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Date) within the selected period. Among those, only work orders with a Due Date that has already passed are counted in the numerator and denominator. Work orders scheduled in the period but not yet due are excluded.
-                      <br /><br />
-                      <strong>Note:</strong> Only counts work orders where the Due Date has already passed. Work orders not yet due are excluded from this calculation.
-                    </div>
-                  )}
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm text-gray-600">Completion Rate</span>
-                        <span className="text-2xl font-bold text-gray-900">
-                          {summary.completionRate.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className={`h-3 rounded-full transition-all ${
-                            summary.completionRate === 100 ? 'bg-green-600' : 'bg-blue-600'
-                          }`}
-                          style={{ width: `${summary.completionRate}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Missed Maintenance</span>
-                        <span className={`text-xl font-semibold ${summary.missed === 0 ? 'text-gray-700' : 'text-red-600'}`}>
-                          {summary.missed}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {summary.completedDue} completed out of {summary.totalDue} due
-                        {summary.totalDue < summary.total && (
-                          <span className="ml-1">({summary.total - summary.totalDue} not yet due)</span>
-                        )}
-                      </div>
-                      {summary.missed > 0 && (
-                        <button
-                          onClick={() => toggleSection('missed')}
-                          className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          {expandedSections.has('missed') ? 'Hide' : 'Show'} details ({summary.missed} work orders)
-                        </button>
-                      )}
-                      {expandedSections.has('missed') && details.missedWorkOrders && details.missedWorkOrders.length > 0 && (
-                        <div className="mt-3 max-h-60 overflow-y-auto">
-                          <table className="w-full text-xs">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">WO Number</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Equipment</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Zone</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Planned Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Due Date</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                              {details.missedWorkOrders.map((wo) => (
-                                <tr key={wo.scheduleId}>
-                                  <td className="px-2 py-1 text-gray-900">{wo.workOrderNumber || '-'}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.equipmentNumber}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.zoneCode}</td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {new Date(wo.r1PlannedDate).toLocaleDateString()}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : '-'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {data.indicator1_asPlannedCompletion.overall.completedAsPlanned} /{' '}
+                    {data.indicator1_asPlannedCompletion.overall.total} items
                   </div>
-                </div>
+                </button>
 
-                {/* Indicator 2: On-Time Rate */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      2. On-Time Completion
-                    </h2>
-                    <button
-                      onClick={() => toggleDetails('onTime')}
-                      className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      {expandedDetails.has('onTime') ? 'Hide info' : 'See info'}
-                    </button>
+                {/* Indicator 2: Reschedule Rate */}
+                <button
+                  onClick={() => setSelectedIndicator(selectedIndicator === '2' ? null : '2')}
+                  className={`text-left rounded-lg shadow-sm p-4 border-l-4 transition-all ${
+                    selectedIndicator === '2'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-600 bg-white hover:border-gray-800'
+                  }`}
+                >
+                  <div className="text-xs font-medium text-gray-600 uppercase">Reschedule Rate</div>
+                  <div className="mt-1 text-2xl font-bold text-gray-900">
+                    {data.indicator2_rescheduleRate.rescheduleRate}%
                   </div>
-                  {expandedDetails.has('onTime') && (
-                    <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
-                      <strong>Definition:</strong> Percentage of completed maintenance work orders that were finished on time (within 6 days of the MTR Planned Date).
-                      <br /><br />
-                      <strong>Calculation:</strong> (Number of on-time completed work orders) ÷ (Total completed work orders) × 100
-                      <br /><br />
-                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>executed</strong> (completed) within the selected period. Only work orders that have been completed are included in both the numerator and denominator. Work orders scheduled in the period but not yet completed are excluded.
-                      <br /><br />
-                      <strong>On-Time Criteria:</strong> Maintenance completed within 6 days (0-6 days) from the MTR Planned Date. Late maintenance is completed 7+ days after the MTR Planned Date.
-                    </div>
-                  )}
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm text-gray-600">On-Time Rate</span>
-                        <span className="text-2xl font-bold text-gray-900">
-                          {summary.onTimeRate.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className="bg-green-600 h-3 rounded-full transition-all"
-                          style={{ width: `${summary.onTimeRate}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Late Maintenance</span>
-                        <span className={`text-xl font-semibold ${summary.late === 0 ? 'text-gray-700' : 'text-orange-600'}`}>
-                          {summary.late}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {summary.onTime} on-time out of {summary.completed} completed
-                      </div>
-                      {summary.late > 0 && (
-                        <button
-                          onClick={() => toggleSection('late')}
-                          className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          {expandedSections.has('late') ? 'Hide' : 'Show'} details ({summary.late} work orders)
-                        </button>
-                      )}
-                      {expandedSections.has('late') && details.lateWorkOrders && details.lateWorkOrders.length > 0 && (
-                        <div className="mt-3 max-h-60 overflow-y-auto">
-                          <table className="w-full text-xs">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">WO Number</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Equipment</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Zone</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Planned Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Completion Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Deviation</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                              {details.lateWorkOrders.map((wo) => (
-                                <tr key={wo.scheduleId}>
-                                  <td className="px-2 py-1 text-gray-900">{wo.workOrderNumber || '-'}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.equipmentNumber}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.zoneCode}</td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {new Date(wo.r1PlannedDate).toLocaleDateString()}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.completionDate ? new Date(wo.completionDate).toLocaleDateString() : '-'}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.executionDeviation !== null && wo.executionDeviation !== undefined
-                                      ? `${wo.executionDeviation.toFixed(1)} days`
-                                      : '-'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {data.indicator2_rescheduleRate.anyReschedule} /{' '}
+                    {data.indicator2_rescheduleRate.totalCompleted} completed
                   </div>
-                </div>
+                </button>
 
-                {/* Indicator 3: Planning Deviation */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      3. Planning Deviation
-                    </h2>
-                    <button
-                      onClick={() => toggleDetails('planning')}
-                      className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      {expandedDetails.has('planning') ? 'Hide info' : 'See info'}
-                    </button>
+                {/* Indicator 3: Late Completion Rate (swapped with 4) */}
+                <button
+                  onClick={() => setSelectedIndicator(selectedIndicator === '3' ? null : '3')}
+                  className={`text-left rounded-lg shadow-sm p-4 border-l-4 transition-all ${
+                    selectedIndicator === '3'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-600 bg-white hover:border-gray-800'
+                  }`}
+                >
+                  <div className="text-xs font-medium text-gray-600 uppercase">Late Completion</div>
+                  <div className="mt-1 text-2xl font-bold text-gray-900">
+                    {data.indicator4_lateCompletionRate.lateCompletionRate}%
                   </div>
-                  {expandedDetails.has('planning') && (
-                    <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
-                      <strong>Definition:</strong> Average number of days between when WM (WeMaintain) schedules maintenance and when MTR originally planned it to start.
-                      <br /><br />
-                      <strong>Calculation:</strong> Average of (WM Planned Date - MTR Planned Date) for all scheduled work orders.
-                      <br /><br />
-                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>scheduled</strong> (WM Planned Date) within the selected period. Only work orders that have both a WM Planned Date and an MTR Planned Date are included in the average.
-                      <br /><br />
-                      <strong>Interpretation:</strong> Positive values mean WM scheduled later than MTR&apos;s plan. Zero means perfect alignment. This measures WM&apos;s ability to schedule maintenance on the dates expected by MTR.
-                    </div>
-                  )}
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm text-gray-600">Average Deviation</span>
-                        <span
-                          className={`text-2xl font-bold ${
-                            summary.avgPlanningDeviation === null
-                              ? 'text-gray-400'
-                              : summary.avgPlanningDeviation > 5
-                              ? 'text-orange-600'
-                              : summary.avgPlanningDeviation < 0
-                              ? 'text-blue-600'
-                              : 'text-gray-700'
-                          }`}
-                        >
-                          {summary.avgPlanningDeviation === null
-                            ? 'N/A'
-                            : `${summary.avgPlanningDeviation > 0 ? '+' : ''}${summary.avgPlanningDeviation.toFixed(1)} days`}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-2">
-                        Days between WM Planned Date and MTR Planned Date
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="text-sm text-gray-600">
-                        Shows how many days WM scheduled after MTR Planned Date
-                      </div>
-                      {summary.avgPlanningDeviation !== null && summary.avgPlanningDeviation > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          Average: {summary.avgPlanningDeviation.toFixed(1)} days later
-                        </div>
-                      )}
-                      {details.planningDeviationWorkOrders && details.planningDeviationWorkOrders.length > 0 && (
-                        <button
-                          onClick={() => toggleSection('planningDeviation')}
-                          className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          {expandedSections.has('planningDeviation') ? 'Hide' : 'Show'} details ({details.planningDeviationWorkOrders.length} work orders)
-                        </button>
-                      )}
-                      {expandedSections.has('planningDeviation') && details.planningDeviationWorkOrders && details.planningDeviationWorkOrders.length > 0 && (
-                        <div className="mt-3 max-h-60 overflow-y-auto">
-                          <table className="w-full text-xs">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">WO Number</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Equipment</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Zone</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">WM Planned Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">MTR Planned Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Deviation</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                              {details.planningDeviationWorkOrders.map((wo) => (
-                                <tr key={wo.scheduleId}>
-                                  <td className="px-2 py-1 text-gray-900">{wo.workOrderNumber || '-'}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.equipmentNumber}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.zoneCode}</td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {new Date(wo.r1PlannedDate).toLocaleDateString()}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.mtrPlannedStartDate ? new Date(wo.mtrPlannedStartDate).toLocaleDateString() : '-'}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.planningDeviation !== null && wo.planningDeviation !== undefined
-                                      ? `${wo.planningDeviation.toFixed(1)} days`
-                                      : '-'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {data.indicator4_lateCompletionRate.lateCompletions} /{' '}
+                    {data.indicator4_lateCompletionRate.totalCompleted} completed
                   </div>
-                </div>
+                </button>
 
-                {/* Indicator 4: Execution Deviation */}
-                <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      4. Execution Deviation
-                    </h2>
-                    <button
-                      onClick={() => toggleDetails('execution')}
-                      className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      {expandedDetails.has('execution') ? 'Hide info' : 'See info'}
-                    </button>
+                {/* Indicator 4: Deviation from MTR (swapped with 3) */}
+                <button
+                  onClick={() => setSelectedIndicator(selectedIndicator === '4' ? null : '4')}
+                  className={`text-left rounded-lg shadow-sm p-4 border-l-4 transition-all ${
+                    selectedIndicator === '4'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-600 bg-white hover:border-gray-800'
+                  }`}
+                >
+                  <div className="text-xs font-medium text-gray-600 uppercase">MTR Deviation</div>
+                  <div className="mt-1 text-2xl font-bold text-gray-900">
+                    {data.indicator3_deviationFromMTR.avgDeviationDays > 0 ? '+' : ''}
+                    {data.indicator3_deviationFromMTR.avgDeviationDays} days
                   </div>
-                  {expandedDetails.has('execution') && (
-                    <div className="text-xs text-gray-600 mb-4 pb-3 border-b border-gray-200">
-                      <strong>Definition:</strong> Average number of days between when maintenance was actually completed and when WM originally planned it to start.
-                      <br /><br />
-                      <strong>Calculation:</strong> Average of (Completion Date - WM Planned Date) for all completed work orders.
-                      <br /><br />
-                      <strong>For a specific period (month or bi-weekly):</strong> The calculation includes all work orders that were <strong>executed</strong> (completed) within the selected period. Only work orders that have been completed are included in the average. Work orders scheduled in the period but not yet completed are excluded.
-                      <br /><br />
-                      <strong>Interpretation:</strong> Positive values mean maintenance was completed later than planned. Zero means completed exactly on the planned date. This measures WM&apos;s ability to execute maintenance on the scheduled day, regardless of whether it matched MTR&apos;s original plan.
-                    </div>
-                  )}
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm text-gray-600">Average Deviation</span>
-                        <span
-                          className={`text-2xl font-bold ${
-                            summary.avgExecutionDeviation === null
-                              ? 'text-gray-400'
-                              : summary.avgExecutionDeviation > 0
-                              ? 'text-orange-600'
-                              : summary.avgExecutionDeviation < 0
-                              ? 'text-blue-600'
-                              : 'text-gray-900'
-                          }`}
-                        >
-                          {summary.avgExecutionDeviation === null
-                            ? 'N/A'
-                            : `${summary.avgExecutionDeviation > 0 ? '+' : ''}${summary.avgExecutionDeviation.toFixed(1)} days`}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-2">
-                        Days between completion date and WM Planned Date
-                      </div>
-                    </div>
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="text-sm text-gray-600">
-                        Shows how many days after planned date maintenance was completed
-                      </div>
-                      {summary.avgExecutionDeviation !== null && summary.avgExecutionDeviation > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          Average: {summary.avgExecutionDeviation.toFixed(1)} days later
-                        </div>
-                      )}
-                      {details.executionDeviationWorkOrders && details.executionDeviationWorkOrders.length > 0 && (
-                        <button
-                          onClick={() => toggleSection('executionDeviation')}
-                          className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          {expandedSections.has('executionDeviation') ? 'Hide' : 'Show'} details ({details.executionDeviationWorkOrders.length} work orders)
-                        </button>
-                      )}
-                      {expandedSections.has('executionDeviation') && details.executionDeviationWorkOrders && details.executionDeviationWorkOrders.length > 0 && (
-                        <div className="mt-3 max-h-60 overflow-y-auto">
-                          <table className="w-full text-xs">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">WO Number</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Equipment</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Zone</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Planned Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Completion Date</th>
-                                <th className="px-2 py-1 text-left text-gray-900 font-semibold">Deviation</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                              {details.executionDeviationWorkOrders.map((wo) => (
-                                <tr key={wo.scheduleId}>
-                                  <td className="px-2 py-1 text-gray-900">{wo.workOrderNumber || '-'}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.equipmentNumber}</td>
-                                  <td className="px-2 py-1 text-gray-900">{wo.zoneCode}</td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {new Date(wo.r1PlannedDate).toLocaleDateString()}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.completionDate ? new Date(wo.completionDate).toLocaleDateString() : '-'}
-                                  </td>
-                                  <td className="px-2 py-1 text-gray-900">
-                                    {wo.executionDeviation !== null && wo.executionDeviation !== undefined
-                                      ? `${wo.executionDeviation.toFixed(1)} days`
-                                      : '-'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {data.indicator3_deviationFromMTR.itemsIncluded} completed
                   </div>
-                </div>
+                </button>
               </div>
 
-              {/* Grouped Data Table */}
-              {grouped && Object.keys(grouped).length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                  <div className="p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Trends by {selectedPeriod === 'month' ? 'Month' : selectedPeriod === 'batch' ? '2-Week Period' : 'Zone'}
-                    </h2>
-                    <div className="overflow-x-auto">
-                      <table className="w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase">
-                              {selectedPeriod === 'month' ? 'Month' : selectedPeriod === 'batch' ? 'Period' : 'Zone'}
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Total
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Completed
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Completion %
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Missed
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              On-Time %
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Late
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Planning Dev.
-                            </th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-700 uppercase">
-                              Execution Dev.
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {Object.values(grouped)
-                            .sort((a, b) => a.key.localeCompare(b.key))
-                            .map((group) => (
-                              <tr key={group.key} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                                  {group.key}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                  {group.total}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                  {group.completed}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                  {group.completionRate.toFixed(1)}%
-                                </td>
-                                <td className="px-4 py-3 text-sm text-red-600 text-right font-medium">
-                                  {group.missed}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                  {group.onTimeRate.toFixed(1)}%
-                                </td>
-                                <td className="px-4 py-3 text-sm text-orange-600 text-right font-medium">
-                                  {group.late}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                  {group.avgPlanningDeviation === null
-                                    ? '-'
-                                    : `${group.avgPlanningDeviation.toFixed(1)} days`}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 text-right">
-                                  {group.avgExecutionDeviation === null
-                                    ? '-'
-                                    : `${group.avgExecutionDeviation.toFixed(1)} days`}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
+              {/* Expanded Details Section */}
+              {selectedIndicator && (
+                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+                  {/* Show loading state for details */}
+                  {effectivelyLoading && (
+                    <div className="text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="mt-2 text-gray-600">Loading details...</p>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Show details once loaded */}
+                  {!effectivelyLoading && data && (
+                    <>
+                      {/* Indicator 1 Details */}
+                      {selectedIndicator === '1' && (
+                        <div>
+                          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                            As-Planned Completion Rate
+                          </h2>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Of all work orders scheduled for a specific date, what percentage were completed as
+                            planned versus skipped/rescheduled. This measures execution reliability.
+                          </p>
+
+                          {/* Summary Cards */}
+                          <div className="grid grid-cols-3 gap-4 mb-6 max-w-3xl">
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-green-600 shadow-sm">
+                              <div className="text-xs font-medium text-green-700 uppercase">Completed as Planned</div>
+                              <div className="mt-1 text-2xl font-bold text-green-900">
+                                {data.indicator1_asPlannedCompletion.overall.completedAsPlanned}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-orange-600 shadow-sm">
+                              <div className="text-xs font-medium text-orange-700 uppercase">Skipped</div>
+                              <div className="mt-1 text-2xl font-bold text-orange-900">
+                                {data.indicator1_asPlannedCompletion.overall.skipped}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-gray-600 shadow-sm">
+                              <div className="text-xs font-medium text-gray-700 uppercase">Still Pending</div>
+                              <div className="mt-1 text-2xl font-bold text-gray-900">
+                                {data.indicator1_asPlannedCompletion.overall.pending}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Daily Completion Rate - Stacked Bar + Line Chart */}
+                          <div className="mb-6">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Daily Completion Rate</h3>
+                            <div className="relative bg-white border border-gray-200 rounded-lg p-6">
+                              {/* Chart container */}
+                              <div className="relative" style={{ height: '300px' }}>
+                                {/* Y-axis labels for count (left) */}
+                                <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-gray-600 pr-2">
+                                  <span>
+                                    {Math.max(
+                                      ...data.indicator1_asPlannedCompletion.byDate.map((d: any) => d.total)
+                                    )}
+                                  </span>
+                                  <span>
+                                    {Math.round(
+                                      Math.max(
+                                        ...data.indicator1_asPlannedCompletion.byDate.map((d: any) => d.total)
+                                      ) * 0.75
+                                    )}
+                                  </span>
+                                  <span>
+                                    {Math.round(
+                                      Math.max(
+                                        ...data.indicator1_asPlannedCompletion.byDate.map((d: any) => d.total)
+                                      ) * 0.5
+                                    )}
+                                  </span>
+                                  <span>
+                                    {Math.round(
+                                      Math.max(
+                                        ...data.indicator1_asPlannedCompletion.byDate.map((d: any) => d.total)
+                                      ) * 0.25
+                                    )}
+                                  </span>
+                                  <span>0</span>
+                                </div>
+
+                                {/* Y-axis labels for percentage (right) */}
+                                <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-between text-xs text-gray-600 pl-2">
+                                  <span>100%</span>
+                                  <span>75%</span>
+                                  <span>50%</span>
+                                  <span>25%</span>
+                                  <span>0%</span>
+                                </div>
+
+                                {/* Chart area */}
+                                <div className="absolute left-12 right-12 top-0 bottom-8 flex items-end justify-around gap-1">
+                                  {data.indicator1_asPlannedCompletion.byDate.map((day: any, idx: number) => {
+                                    const maxCount = Math.max(
+                                      ...data.indicator1_asPlannedCompletion.byDate.map((d: any) => d.total)
+                                    )
+                                    const total = day.total
+                                    
+                                    // Calculate heights for stacked bars
+                                    const completedHeight = maxCount > 0 ? (day.completedAsPlanned / maxCount) * 250 : 0
+                                    const skippedHeight = maxCount > 0 ? (day.skipped / maxCount) * 250 : 0
+                                    const pendingHeight = maxCount > 0 ? (day.pending / maxCount) * 250 : 0
+
+                                    return (
+                                      <div
+                                        key={day.date}
+                                        className="relative flex-1 flex flex-col items-center"
+                                        style={{ height: '100%' }}
+                                      >
+                                        {/* Stacked bars */}
+                                        <div className="absolute bottom-0 w-full flex flex-col items-center">
+                                          {/* Total count on top */}
+                                          <div className="text-xs font-semibold text-gray-900 mb-1">
+                                            {total > 0 ? total : ''}
+                                          </div>
+                                          
+                                          {/* Stacked bar segments */}
+                                          <div className="w-full flex flex-col-reverse">
+                                            {/* Pending (gray) - bottom */}
+                                            {day.pending > 0 && (
+                                              <div
+                                                className="w-full bg-gray-400"
+                                                style={{ height: `${pendingHeight}px` }}
+                                                title={`Pending: ${day.pending}`}
+                                              ></div>
+                                            )}
+                                            
+                                            {/* Skipped (orange) - middle */}
+                                            {day.skipped > 0 && (
+                                              <div
+                                                className="w-full bg-orange-500"
+                                                style={{ height: `${skippedHeight}px` }}
+                                                title={`Skipped: ${day.skipped}`}
+                                              ></div>
+                                            )}
+                                            
+                                            {/* Completed (green) - top */}
+                                            {day.completedAsPlanned > 0 && (
+                                              <div
+                                                className="w-full bg-green-500 rounded-t"
+                                                style={{ height: `${completedHeight}px` }}
+                                                title={`Completed: ${day.completedAsPlanned}`}
+                                              ></div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+
+                                {/* Line chart overlay */}
+                                  <svg
+                                    className="absolute inset-0 pointer-events-none"
+                                    viewBox="0 0 400 100"
+                                    preserveAspectRatio="xMidYMid meet"
+                                    style={{ width: '100%', height: '100%' }}
+                                  >
+                                  {(() => {
+                                      const today = new Date()
+                                      today.setHours(0, 0, 0, 0)
+                                      
+                                      const allDates = data.indicator1_asPlannedCompletion.byDate
+                                      const totalDays = allDates.length
+                                      
+                                      // Build points only for dates up to today with data
+                                      const points: Array<{ x: number; y: number; rate: number }> = []
+                                      
+                                      allDates.forEach((day: any, idx: number) => {
+                                        const dayDate = new Date(day.date)
+                                        dayDate.setHours(0, 0, 0, 0)
+                                        
+                                        // Only include past dates with data
+                                        if (dayDate <= today && day.total > 0) {
+                                          const x = ((idx + 0.5) / totalDays) * 400
+                                          const y = 100 - day.completionRate
+                                          points.push({ x, y, rate: day.completionRate })
+                                        }
+                                      })
+                                      
+                                      if (points.length === 0) return null
+                                      
+                                      return (
+                                        <>
+                                          <polyline
+                                            points={points.map(p => `${p.x},${p.y}`).join(' ')}
+                                            fill="none"
+                                            stroke="#1e3a8a"
+                                            strokeWidth="1.5"
+                                            vectorEffect="non-scaling-stroke"
+                                          />
+                                          {/* Points with title for hover */}
+                                          {points.map((point, idx) => (
+                                            <circle
+                                              key={idx}
+                                              cx={point.x}
+                                              cy={point.y}
+                                              r="1.5"
+                                              fill="#1e3a8a"
+                                              className="pointer-events-auto cursor-pointer"
+                                            >
+                                              <title>{point.rate}%</title>
+                                            </circle>
+                                          ))}
+                                        </>
+                                      )
+                                    })()}
+                                  </svg>
+                                </div>
+
+                                {/* X-axis labels (dates) - show every 5 days */}
+                                <div className="absolute left-12 right-12 bottom-0 flex justify-around text-xs text-gray-600">
+                                  {data.indicator1_asPlannedCompletion.byDate.map((day: any, idx: number) => {
+                                    // Get day of month
+                                    const dayOfMonth = new Date(day.date).getDate()
+                                    
+                                    // Show label if it's day 1, 5, 10, 15, 20, 25, or last day of month
+                                    const isLastDay = idx === data.indicator1_asPlannedCompletion.byDate.length - 1
+                                    const shouldShow = dayOfMonth === 1 || dayOfMonth % 5 === 0 || isLastDay
+                                    
+                                    return (
+                                      <div key={day.date} className="flex-1 text-center">
+                                        {shouldShow ? (
+                                          new Date(day.date).toLocaleDateString('en-US', {
+                                            month: 'numeric',
+                                            day: 'numeric',
+                                          })
+                                        ) : (
+                                          ''
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Legend */}
+                              <div className="flex items-center justify-center gap-6 mt-4 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                                  <span className="text-gray-700">Completed</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                                  <span className="text-gray-700">Skipped</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 bg-gray-400 rounded"></div>
+                                  <span className="text-gray-700">Pending</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-0.5 bg-blue-900"></div>
+                                  <span className="text-gray-700">Completion Rate %</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Skipped Items Table */}
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                              Skipped Items (All Dates)
+                            </h3>
+                            {data.indicator1_asPlannedCompletion.skippedItems &&
+                            data.indicator1_asPlannedCompletion.skippedItems.length > 0 ? (
+                              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Equipment
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Work Order
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Zone
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Original Date
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Skipped On
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Rescheduled To
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {data.indicator1_asPlannedCompletion.skippedItems.map(
+                                      (item: any, idx: number) => (
+                                        <tr key={idx} className="hover:bg-gray-50">
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            {item.equipmentNumber}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            {item.workOrderNumber}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">{item.zoneName}</td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">
+                                            {new Date(item.originalDate).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              year: 'numeric',
+                                            })}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">
+                                            {new Date(item.skippedDate).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              year: 'numeric',
+                                            })}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">
+                                            {item.newDate
+                                              ? new Date(item.newDate).toLocaleDateString('en-US', {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  year: 'numeric',
+                                                })
+                                              : 'TBD'}
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-sm text-gray-600">
+                                No skipped items in this period
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Indicator 2 Details */}
+                      {selectedIndicator === '2' && (
+                        <div>
+                          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                            Work Order Reschedule Rate
+                          </h2>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Of all completed work orders, what percentage were rescheduled at least once before
+                            completion. This measures schedule stability.
+                          </p>
+
+                          {/* Summary Cards */}
+                          <div className="grid grid-cols-4 gap-4 mb-6 max-w-4xl">
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-green-600 shadow-sm">
+                              <div className="text-xs font-medium text-green-700 uppercase">Never Rescheduled</div>
+                              <div className="mt-1 text-2xl font-bold text-green-900">
+                                {data.indicator2_rescheduleRate.neverRescheduled}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-yellow-600 shadow-sm">
+                              <div className="text-xs font-medium text-yellow-700 uppercase">Rescheduled Once</div>
+                              <div className="mt-1 text-2xl font-bold text-yellow-900">
+                                {data.indicator2_rescheduleRate.rescheduledOnce}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-orange-600 shadow-sm">
+                              <div className="text-xs font-medium text-orange-700 uppercase">Rescheduled Twice</div>
+                              <div className="mt-1 text-2xl font-bold text-orange-900">
+                                {data.indicator2_rescheduleRate.rescheduledTwice}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-red-600 shadow-sm">
+                              <div className="text-xs font-medium text-red-700 uppercase">Rescheduled 3+ Times</div>
+                              <div className="mt-1 text-2xl font-bold text-red-900">
+                                {data.indicator2_rescheduleRate.rescheduledThreePlus}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Detailed Tables */}
+                          <div className="space-y-6">
+                            {/* Rescheduled Once */}
+                            {data.indicator2_rescheduleRate.details?.rescheduledOnce &&
+                              data.indicator2_rescheduleRate.details.rescheduledOnce.length > 0 && (
+                                <div>
+                                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                                    Rescheduled Once ({data.indicator2_rescheduleRate.rescheduledOnce} items)
+                                  </h3>
+                                  <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50 sticky top-0">
+                                        <tr>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Equipment
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Work Order
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Zone
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Completion Date
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {data.indicator2_rescheduleRate.details.rescheduledOnce.map(
+                                          (item: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                              <td className="px-4 py-2 text-sm text-gray-900">
+                                                {item.equipmentNumber}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-900">
+                                                {item.workOrderNumber}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-600">{item.zoneName}</td>
+                                              <td className="px-4 py-2 text-sm text-gray-600">
+                                                {item.completionDate
+                                                  ? new Date(item.completionDate).toLocaleDateString('en-US', {
+                                                      month: 'short',
+                                                      day: 'numeric',
+                                                      year: 'numeric',
+                                                    })
+                                                  : 'N/A'}
+                                              </td>
+                                            </tr>
+                                          )
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                            {/* Rescheduled Twice */}
+                            {data.indicator2_rescheduleRate.details?.rescheduledTwice &&
+                              data.indicator2_rescheduleRate.details.rescheduledTwice.length > 0 && (
+                                <div>
+                                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                                    Rescheduled Twice ({data.indicator2_rescheduleRate.rescheduledTwice} items)
+                                  </h3>
+                                  <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50 sticky top-0">
+                                        <tr>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Equipment
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Work Order
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Zone
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Completion Date
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {data.indicator2_rescheduleRate.details.rescheduledTwice.map(
+                                          (item: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                              <td className="px-4 py-2 text-sm text-gray-900">
+                                                {item.equipmentNumber}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-900">
+                                                {item.workOrderNumber}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-600">{item.zoneName}</td>
+                                              <td className="px-4 py-2 text-sm text-gray-600">
+                                                {item.completionDate
+                                                  ? new Date(item.completionDate).toLocaleDateString('en-US', {
+                                                      month: 'short',
+                                                      day: 'numeric',
+                                                      year: 'numeric',
+                                                    })
+                                                  : 'N/A'}
+                                              </td>
+                                            </tr>
+                                          )
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                            {/* Rescheduled 3+ Times */}
+                            {data.indicator2_rescheduleRate.details?.rescheduledThreePlus &&
+                              data.indicator2_rescheduleRate.details.rescheduledThreePlus.length > 0 && (
+                                <div>
+                                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                                    Rescheduled 3+ Times ({data.indicator2_rescheduleRate.rescheduledThreePlus}{' '}
+                                    items)
+                                  </h3>
+                                  <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50 sticky top-0">
+                                        <tr>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Equipment
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Work Order
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Zone
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Times Rescheduled
+                                          </th>
+                                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                            Completion Date
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {data.indicator2_rescheduleRate.details.rescheduledThreePlus.map(
+                                          (item: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                              <td className="px-4 py-2 text-sm text-gray-900">
+                                                {item.equipmentNumber}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-900">
+                                                {item.workOrderNumber}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-600">{item.zoneName}</td>
+                                              <td className="px-4 py-2 text-sm font-semibold text-red-700">
+                                                {item.skippedCount}x
+                                              </td>
+                                              <td className="px-4 py-2 text-sm text-gray-600">
+                                                {item.completionDate
+                                                  ? new Date(item.completionDate).toLocaleDateString('en-US', {
+                                                      month: 'short',
+                                                      day: 'numeric',
+                                                      year: 'numeric',
+                                                    })
+                                                  : 'N/A'}
+                                              </td>
+                                            </tr>
+                                          )
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Indicator 3 Details (Late Completion - swapped) */}
+                      {selectedIndicator === '3' && (
+                        <div>
+                          <h2 className="text-xl font-semibold text-gray-900 mb-2">Late Completion Rate</h2>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Of all completed work orders, what percentage were completed when scheduled close to
+                            the deadline (within 6 days of due date). This measures execution urgency.
+                          </p>
+
+                          {/* Summary Cards */}
+                          <div className="grid grid-cols-2 gap-4 mb-6 max-w-2xl">
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-red-600 shadow-sm">
+                              <div className="text-xs font-medium text-red-700 uppercase">Late Completions</div>
+                              <div className="mt-1 text-2xl font-bold text-red-900">
+                                {data.indicator4_lateCompletionRate.lateCompletions}
+                              </div>
+                              <div className="mt-1 text-xs text-red-700">Within 6 days of deadline</div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-green-600 shadow-sm">
+                              <div className="text-xs font-medium text-green-700 uppercase">On-Time Completions</div>
+                              <div className="mt-1 text-2xl font-bold text-green-900">
+                                {data.indicator4_lateCompletionRate.totalCompleted -
+                                  data.indicator4_lateCompletionRate.lateCompletions}
+                              </div>
+                              <div className="mt-1 text-xs text-green-700">7+ days buffer</div>
+                            </div>
+                          </div>
+
+                          {/* Late Completions List */}
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                              Late Completion Details
+                            </h3>
+                            {data.indicator4_lateCompletionRate.details?.lateCompletionItems &&
+                            data.indicator4_lateCompletionRate.details.lateCompletionItems.length > 0 ? (
+                              <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50 sticky top-0">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Equipment
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Work Order
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Zone
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Due Date
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Scheduled Date
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Completion Date
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Days Before Due
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {data.indicator4_lateCompletionRate.details.lateCompletionItems.map(
+                                      (item: any, idx: number) => {
+                                        // Calculate days before due date
+                                        let daysBeforeDue = null
+                                        if (item.r1PlannedDate && item.dueDate) {
+                                          const plannedDate = new Date(item.r1PlannedDate)
+                                          const dueDate = new Date(item.dueDate)
+                                          plannedDate.setHours(0, 0, 0, 0)
+                                          dueDate.setHours(0, 0, 0, 0)
+                                          daysBeforeDue = Math.floor(
+                                            (dueDate.getTime() - plannedDate.getTime()) /
+                                              (1000 * 60 * 60 * 24)
+                                          )
+                                        }
+
+                                        return (
+                                          <tr key={idx} className="hover:bg-gray-50">
+                                            <td className="px-4 py-2 text-sm text-gray-900">
+                                              {item.equipmentNumber}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-900">
+                                              {item.workOrderNumber}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">{item.zoneName}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {item.dueDate
+                                                ? new Date(item.dueDate).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                  })
+                                                : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {item.r1PlannedDate
+                                                ? new Date(item.r1PlannedDate).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                  })
+                                                : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-600">
+                                              {item.completionDate
+                                                ? new Date(item.completionDate).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                  })
+                                                : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm font-semibold text-red-700">
+                                              {daysBeforeDue !== null ? `${daysBeforeDue} days` : 'N/A'}
+                                            </td>
+                                          </tr>
+                                        )
+                                      }
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-sm text-gray-600">
+                                No late completions in this period
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Indicator 4 Details (Deviation - swapped) */}
+                      {selectedIndicator === '4' && (
+                        <div>
+                          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                            Deviation from MTR Scheduled Date
+                          </h2>
+                          <p className="text-sm text-gray-600 mb-4">
+                            Average number of days between when MTR originally scheduled work and when it was
+                            actually completed. Negative = early, 0 = on-time, positive = later than planned.
+                          </p>
+
+                          {/* Summary Cards */}
+                          <div className="grid grid-cols-3 gap-4 mb-6 max-w-3xl">
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-green-600 shadow-sm">
+                              <div className="text-xs font-medium text-green-700 uppercase">Completed Early</div>
+                              <div className="mt-1 text-2xl font-bold text-green-900">
+                                {data.indicator3_deviationFromMTR.distribution.early}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-blue-600 shadow-sm">
+                              <div className="text-xs font-medium text-blue-700 uppercase">Same Day Completion</div>
+                              <div className="mt-1 text-2xl font-bold text-blue-900">
+                                {data.indicator3_deviationFromMTR.distribution.onTime}
+                              </div>
+                            </div>
+                            <div className="bg-white rounded-lg p-4 border-l-4 border-orange-600 shadow-sm">
+                              <div className="text-xs font-medium text-orange-700 uppercase">Completed Later</div>
+                              <div className="mt-1 text-2xl font-bold text-orange-900">
+                                {data.indicator3_deviationFromMTR.distribution.late}
+                              </div>
+                            </div>
+                          </div>
+
+                          {data.indicator3_deviationFromMTR.itemsExcluded > 0 && (
+                            <div className="mb-4 text-sm text-gray-600 bg-yellow-50 border border-yellow-200 rounded p-2">
+                              ⚠️ {data.indicator3_deviationFromMTR.itemsExcluded} items excluded (missing
+                              MTR reference date)
+                            </div>
+                          )}
+
+                          {/* Non-Same Day Completions List */}
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                              Non-Same Day Completions
+                            </h3>
+                            {data.indicator3_deviationFromMTR.details?.nonSameDayCompletions &&
+                            data.indicator3_deviationFromMTR.details.nonSameDayCompletions.length > 0 ? (
+                              <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50 sticky top-0">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Equipment
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Work Order
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Zone
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        MTR Planned Date
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Completion Date
+                                      </th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">
+                                        Deviation (Days)
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {data.indicator3_deviationFromMTR.details.nonSameDayCompletions.map(
+                                      (item: any, idx: number) => (
+                                        <tr key={idx} className="hover:bg-gray-50">
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            {item.equipmentNumber}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            {item.workOrderNumber}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">{item.zoneName}</td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">
+                                            {item.mtrPlannedDate
+                                              ? new Date(item.mtrPlannedDate).toLocaleDateString('en-US', {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  year: 'numeric',
+                                                })
+                                              : 'N/A'}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-600">
+                                            {item.completionDate
+                                              ? new Date(item.completionDate).toLocaleDateString('en-US', {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  year: 'numeric',
+                                                })
+                                              : 'N/A'}
+                                          </td>
+                                          <td
+                                            className={`px-4 py-2 text-sm font-semibold ${
+                                              item.deviationDays < 0
+                                                ? 'text-green-700'
+                                                : item.deviationDays > 0
+                                                ? 'text-orange-700'
+                                                : 'text-gray-900'
+                                            }`}
+                                          >
+                                            {item.deviationDays > 0 ? '+' : ''}
+                                            {item.deviationDays} days
+                                            {item.deviationDays < 0 && ' (Early)'}
+                                            {item.deviationDays > 0 && ' (Late)'}
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-sm text-gray-600">
+                                All items were completed on their MTR planned date
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </>
@@ -705,4 +1118,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-
