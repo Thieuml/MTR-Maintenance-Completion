@@ -46,6 +46,11 @@ export async function GET(request: NextRequest) {
       where.equipmentId = equipmentId
     }
 
+    // Exclude CANCELLED schedules by default (unless explicitly requested)
+    if (!status) {
+      where.status = { not: 'CANCELLED' }
+    }
+
     // Only filter by r1PlannedDate if dates are provided AND status is not SKIPPED/MISSED
     // SKIPPED/MISSED items have null r1PlannedDate, so date filtering would exclude them
     // COMPLETED items normally keep r1PlannedDate (the planned date), but migrated ones might have null r1PlannedDate
