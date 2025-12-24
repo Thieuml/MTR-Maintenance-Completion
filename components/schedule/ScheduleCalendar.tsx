@@ -106,7 +106,7 @@ export function ScheduleCalendar({
   }, [fromDate, toDate, viewMode])
 
   const getScheduleBaseDate = (schedule: any) => {
-    // For completed items: use r1PlannedDate (the planned date that was kept when marked as completed)
+    // For completed items: use r1PlannedDate (the planned/scheduled date)
     // Only fallback to updatedAt if r1PlannedDate is null (bad migration case)
     if (schedule?.status === 'COMPLETED') {
       return schedule?.r1PlannedDate ?? schedule?.updatedAt ?? null
@@ -269,12 +269,9 @@ export function ScheduleCalendar({
       minute = 30
     }
 
-    // Compare date strings directly (allow today - target date must be >= today)
+    // Check if moving to past date
     const todayDateStr = getHKTTodayKey()
-    if (compareHKTDateKeys(targetDateKey, todayDateStr) < 0) {
-      alert('Cannot move schedule to a past date.')
-      return
-    }
+    const isPastDate = compareHKTDateKeys(targetDateKey, todayDateStr) < 0
 
     // Create date with the intended local date/time
     // This ensures the date portion matches what the user sees, regardless of timezone
@@ -289,22 +286,26 @@ export function ScheduleCalendar({
       ? schedules.find((s) => s.id === targetDisplaySchedule.id)
       : null
 
-    // Determine behavior: swap vs push-forward
-    // - If moving schedule is PLANNED (has r1PlannedDate), swap positions (no warning)
-    // - If moving schedule is PENDING/SKIPPED/MISSED (being rescheduled), push forward (show warning)
-    // Note: Future slots can only be occupied by PLANNED items, so target will always be PLANNED
-    const scheduleIsPlanned = schedule.status === 'PLANNED' && Boolean(schedule.r1PlannedDate)
-    const willPushTarget = !!targetSchedule && !scheduleIsPlanned
+    // Determine behavior: swap vs push-forward (only for future dates)
+    // For past dates, backend handles completion logic differently
+    let willPushTarget = false
+    if (!isPastDate) {
+      // - If moving schedule is PLANNED (has r1PlannedDate), swap positions (no warning)
+      // - If moving schedule is PENDING/SKIPPED/MISSED (being rescheduled), push forward (show warning)
+      // Note: Future slots can only be occupied by PLANNED items, so target will always be PLANNED
+      const scheduleIsPlanned = schedule.status === 'PLANNED' && Boolean(schedule.r1PlannedDate)
+      willPushTarget = !!targetSchedule && !scheduleIsPlanned
 
-    if (targetSchedule && willPushTarget) {
-      const confirmed = window.confirm(
-        `This slot is already occupied by ${targetSchedule.equipment.equipmentNumber}. The existing work order will be pushed to the next available slot after ${formatHKTDateKey(
-          targetDateKey,
-          { month: 'long', day: 'numeric' }
-        )}. Do you want to continue?`
-      )
-      if (!confirmed) {
-        return
+      if (targetSchedule && willPushTarget) {
+        const confirmed = window.confirm(
+          `This slot is already occupied by ${targetSchedule.equipment.equipmentNumber}. The existing work order will be pushed to the next available slot after ${formatHKTDateKey(
+            targetDateKey,
+            { month: 'long', day: 'numeric' }
+          )}. Do you want to continue?`
+        )
+        if (!confirmed) {
+          return
+        }
       }
     }
 
@@ -317,7 +318,17 @@ export function ScheduleCalendar({
     // Check if moving a pending card (past date, not completed) - use HKT for consistency
     const scheduleDateKey = getHKTDateKey(new Date(scheduleBaseDate))
     const isPending =
-      compareHKTDateKeys(scheduleDateKey, todayKey) < 0 && schedule.status === 'PENDING'
+      compareHKTDateKeys(scheduleDateKey, todayDateStr) < 0 && schedule.status === 'PENDING'
+
+    // Show confirmation for past date moves
+    if (isPastDate) {
+      const confirmed = window.confirm(
+        `You are moving this work order to a past date (${formatHKTDateKey(targetDateKey, { month: 'long', day: 'numeric'})}). This will mark it as completed. Continue?`
+      )
+      if (!confirmed) {
+        return
+      }
+    }
 
     // Check for 23:00 slot eligibility warning
     const isInvalid2300Slot = targetTimeSlot === 'SLOT_2300' && schedule.equipment.canUse2300Slot !== true
@@ -358,11 +369,16 @@ export function ScheduleCalendar({
         newTimeSlot: targetTimeSlot,
       })
 
+      // Only apply swap logic if:
+      // 1. Target schedule exists
+      // 2. Not pushing target forward
+      // 3. Target is not COMPLETED (for past dates, COMPLETED items don't swap, but PENDING items do)
       if (
         targetSchedule &&
         !willPushTarget &&
         schedule.r1PlannedDate &&
-        targetSchedule.r1PlannedDate
+        targetSchedule.r1PlannedDate &&
+        targetSchedule.status !== 'COMPLETED' // Don't swap COMPLETED items (scenario 3)
       ) {
         newMap.set(targetSchedule.id, {
           newDate: schedule.r1PlannedDate,

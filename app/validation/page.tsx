@@ -3,10 +3,13 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSchedule } from '@/lib/hooks'
 import { Navigation } from '@/components/shared/Navigation'
+import { DatePickerModal } from '@/components/shared/DatePickerModal'
 
 type VisitReport = {
   hasReport: boolean
   pdfReportUrl: string | null
+  completedDate: string | null
+  isExactMatch: boolean
 }
 
 export default function ValidationPage() {
@@ -16,6 +19,15 @@ export default function ValidationPage() {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
   const [visitReports, setVisitReports] = useState<Record<string, VisitReport>>({})
   const [isLoadingReports, setIsLoadingReports] = useState(false)
+  const [datePickerModal, setDatePickerModal] = useState<{
+    isOpen: boolean
+    scheduleId: string | null
+    scheduleName: string | null
+  }>({
+    isOpen: false,
+    scheduleId: null,
+    scheduleName: null,
+  })
   // Show all past services that haven't been actioned
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -117,6 +129,52 @@ export default function ValidationPage() {
         next.delete(scheduleId)
         return next
       })
+    }
+  }
+
+  const handleCompletedDifferentDate = (scheduleId: string, scheduleName: string) => {
+    setDatePickerModal({
+      isOpen: true,
+      scheduleId,
+      scheduleName,
+    })
+  }
+
+  const handleDateConfirm = async (completedDate: string) => {
+    const scheduleId = datePickerModal.scheduleId
+    if (!scheduleId) return
+
+    setProcessingIds(prev => new Set(prev).add(scheduleId))
+    try {
+      const response = await fetch(`/api/schedules/${scheduleId}/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'completed_different_date',
+          completedDate,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(`Error: ${error.error || 'Failed to validate schedule'}`)
+        return
+      }
+
+      alert('Item marked as COMPLETED on selected date.')
+      await mutate()
+    } catch (error) {
+      console.error('Error validating schedule:', error)
+      alert(`Failed to validate schedule: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev)
+        next.delete(scheduleId)
+        return next
+      })
+      setDatePickerModal({ isOpen: false, scheduleId: null, scheduleName: null })
     }
   }
 
@@ -342,30 +400,40 @@ export default function ValidationPage() {
                             ) : (() => {
                               const report = visitReports[schedule.id]
                               if (report?.hasReport && report.pdfReportUrl) {
+                                const isExactMatch = report.isExactMatch
+                                const iconColor = isExactMatch ? 'text-blue-600 hover:text-blue-800' : 'text-orange-500 hover:text-orange-700'
+                                
                                 return (
-                                  <a
-                                    href={report.pdfReportUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center justify-center text-blue-600 hover:text-blue-800"
-                                    title="View PDF Report"
-                                  >
-                                    <svg
-                                      width="24"
-                                      height="24"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="flex-shrink-0"
+                                  <div className="flex flex-col items-center">
+                                    <a
+                                      href={report.pdfReportUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={`inline-flex items-center justify-center ${iconColor}`}
+                                      title={isExactMatch ? 'View PDF Report' : 'View PDF Report (completed on different date)'}
                                     >
-                                      <path
-                                        fillRule="evenodd"
-                                        clipRule="evenodd"
-                                        d="M21.996 14.999L21.999 15.038L22 15.05L21.999 15.04L22 18.8327C22 19.8871 21.1841 20.7509 20.1493 20.8272L20 20.8327H4C2.94564 20.8327 2.08183 20.0169 2.00549 18.982L2 18.8327V15C2.02797 14.6639 2.30817 14.4 2.65 14.4C2.97635 14.4 3.24653 14.6405 3.29295 14.954L3.295 14.999L3.3 15V18.8327C3.3 19.1871 3.56334 19.48 3.90501 19.5263L4 19.5327H20C20.3544 19.5327 20.6473 19.2694 20.6936 18.9277L20.7 18.8327V15C20.728 14.6639 21.0082 14.4 21.35 14.4C21.6763 14.4 21.9465 14.6405 21.993 14.954L21.996 14.999L22 15L21.999 15.038L21.996 14.999ZM12.05 1.90002C12.409 1.90002 12.7 2.19104 12.7 2.55002L12.7 13.57L17.5839 9.50069C17.8597 9.27087 18.2695 9.30813 18.4994 9.58391C18.7292 9.85969 18.6919 10.2696 18.4161 10.4994L12.4161 15.4994C12.1751 15.7003 11.8249 15.7003 11.5839 15.4994L5.58389 10.4994C5.30811 10.2696 5.27085 9.85969 5.50066 9.58391C5.73048 9.30813 6.14035 9.27087 6.41613 9.50069L11.4 13.653L11.4 2.55002C11.4 2.19104 11.691 1.90002 12.05 1.90002Z"
-                                        fill="currentColor"
-                                      />
-                                    </svg>
-                                  </a>
+                                      <svg
+                                        width="24"
+                                        height="24"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="flex-shrink-0"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          clipRule="evenodd"
+                                          d="M21.996 14.999L21.999 15.038L22 15.05L21.999 15.04L22 18.8327C22 19.8871 21.1841 20.7509 20.1493 20.8272L20 20.8327H4C2.94564 20.8327 2.08183 20.0169 2.00549 18.982L2 18.8327V15C2.02797 14.6639 2.30817 14.4 2.65 14.4C2.97635 14.4 3.24653 14.6405 3.29295 14.954L3.295 14.999L3.3 15V18.8327C3.3 19.1871 3.56334 19.48 3.90501 19.5263L4 19.5327H20C20.3544 19.5327 20.6473 19.2694 20.6936 18.9277L20.7 18.8327V15C20.728 14.6639 21.0082 14.4 21.35 14.4C21.6763 14.4 21.9465 14.6405 21.993 14.954L21.996 14.999L22 15L21.999 15.038L21.996 14.999ZM12.05 1.90002C12.409 1.90002 12.7 2.19104 12.7 2.55002L12.7 13.57L17.5839 9.50069C17.8597 9.27087 18.2695 9.30813 18.4994 9.58391C18.7292 9.85969 18.6919 10.2696 18.4161 10.4994L12.4161 15.4994C12.1751 15.7003 11.8249 15.7003 11.5839 15.4994L5.58389 10.4994C5.30811 10.2696 5.27085 9.85969 5.50066 9.58391C5.73048 9.30813 6.14035 9.27087 6.41613 9.50069L11.4 13.653L11.4 2.55002C11.4 2.19104 11.691 1.90002 12.05 1.90002Z"
+                                          fill="currentColor"
+                                        />
+                                      </svg>
+                                    </a>
+                          {!isExactMatch && report.completedDate && (
+                            <span className="text-xs text-orange-600 mt-1">
+                              {new Date(report.completedDate).toLocaleDateString('en-GB')}
+                            </span>
+                          )}
+                                  </div>
                                 )
                               }
                               return (
@@ -388,6 +456,39 @@ export default function ValidationPage() {
                                 {processingIds.has(schedule.id) ? 'Processing...' : 'Completed'}
                               </button>
                               <button
+                                onClick={() => handleCompletedDifferentDate(
+                                  schedule.id,
+                                  `${schedule.workOrderNumber} - ${schedule.equipment.equipmentNumber}`
+                                )}
+                                disabled={processingIds.has(schedule.id)}
+                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Mark as completed on a different date"
+                              >
+                                <svg
+                                  width="20"
+                                  height="20"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path
+                                    d="M8 2V5M16 2V5M3.5 9.09H20.5M21 8.5V17C21 20 19.5 22 16 22H8C4.5 22 3 20 3 17V8.5C3 5.5 4.5 3.5 8 3.5H16C19.5 3.5 21 5.5 21 8.5Z"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeMiterlimit="10"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                  <path
+                                    d="M15.6947 13.7H15.7037M15.6947 16.7H15.7037M11.9955 13.7H12.0045M11.9955 16.7H12.0045M8.29431 13.7H8.30329M8.29431 16.7H8.30329"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                              <button
                                 onClick={() => handleValidate(schedule.id, 'to_reschedule')}
                                 disabled={processingIds.has(schedule.id)}
                                 className="px-3 py-1 text-xs font-medium text-white bg-orange-600 rounded hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
@@ -406,6 +507,12 @@ export default function ValidationPage() {
           )}
         </div>
       </main>
+      <DatePickerModal
+        isOpen={datePickerModal.isOpen}
+        onClose={() => setDatePickerModal({ isOpen: false, scheduleId: null, scheduleName: null })}
+        onConfirm={handleDateConfirm}
+        scheduleName={datePickerModal.scheduleName || undefined}
+      />
     </div>
   )
 }

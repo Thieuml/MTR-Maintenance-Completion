@@ -11,7 +11,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
  * Fetch maintenance visit reports from Looker for given schedules
  * 
  * Request body: { scheduleIds: string[] }
- * Returns: { [scheduleId]: { hasReport: boolean, pdfReportUrl: string | null } }
+ * Returns: { [scheduleId]: { hasReport: boolean, pdfReportUrl: string | null, completedDate: string | null, isExactMatch: boolean } }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -138,11 +138,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Match schedules to visits
-    const results: Record<string, { hasReport: boolean; pdfReportUrl: string | null }> = {}
+    const results: Record<string, { 
+      hasReport: boolean
+      pdfReportUrl: string | null
+      completedDate: string | null
+      isExactMatch: boolean
+    }> = {}
 
     for (const schedule of schedules) {
       if (!schedule.r1PlannedDate) {
-        results[schedule.id] = { hasReport: false, pdfReportUrl: null }
+        results[schedule.id] = { 
+          hasReport: false, 
+          pdfReportUrl: null, 
+          completedDate: null,
+          isExactMatch: false 
+        }
         continue
       }
 
@@ -153,35 +163,64 @@ export async function POST(request: NextRequest) {
       equipmentNumberUpper = equipmentNumberUpper.replace(/KOW-SL(\d)$/, 'KOW-SL0$1')
       equipmentNumberUpper = equipmentNumberUpper.replace(/\s+/g, '-')
       const scheduleDateKey = getHKTDateKey(schedule.r1PlannedDate)
-      const nextDateKey = addDaysToHKTDateKey(scheduleDateKey, 1)
 
-      // Check for visit on same date or next date (use uppercase for matching)
+      // Check for visit on same date or up to 5 days later
       const equipmentVisits = visitsByEquipmentAndDate.get(equipmentNumberUpper)
       
       if (equipmentVisits) {
-        // Check same date first
+        // Check same day first (exact match)
         const visitSameDay = equipmentVisits.get(scheduleDateKey)
         if (visitSameDay) {
           results[schedule.id] = {
             hasReport: true,
             pdfReportUrl: visitSameDay.pdfReport || null,
+            completedDate: scheduleDateKey,
+            isExactMatch: true,
           }
           continue
         }
 
-        // Check next day
+        // Check next day (still considered exact match for overnight work)
+        const nextDateKey = addDaysToHKTDateKey(scheduleDateKey, 1)
         const visitNextDay = equipmentVisits.get(nextDateKey)
         if (visitNextDay) {
           results[schedule.id] = {
             hasReport: true,
             pdfReportUrl: visitNextDay.pdfReport || null,
+            completedDate: nextDateKey,
+            isExactMatch: true,
           }
+          continue
+        }
+
+        // Check days 2-5 (non-exact match, highlight in orange)
+        for (let daysOffset = 2; daysOffset <= 5; daysOffset++) {
+          const checkDateKey = addDaysToHKTDateKey(scheduleDateKey, daysOffset)
+          const visitLater = equipmentVisits.get(checkDateKey)
+          if (visitLater) {
+            results[schedule.id] = {
+              hasReport: true,
+              pdfReportUrl: visitLater.pdfReport || null,
+              completedDate: checkDateKey,
+              isExactMatch: false,
+            }
+            break // Use the earliest match found
+          }
+        }
+        
+        // If we found a match in the loop above, continue
+        if (results[schedule.id]) {
           continue
         }
       }
 
       // No visit found
-      results[schedule.id] = { hasReport: false, pdfReportUrl: null }
+      results[schedule.id] = { 
+        hasReport: false, 
+        pdfReportUrl: null, 
+        completedDate: null,
+        isExactMatch: false 
+      }
     }
 
     return NextResponse.json(results)

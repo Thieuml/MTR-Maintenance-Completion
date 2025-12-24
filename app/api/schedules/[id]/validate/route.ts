@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const validateScheduleSchema = z.object({
-  action: z.enum(['completed', 'to_reschedule']),
+  action: z.enum(['completed', 'to_reschedule', 'completed_different_date']),
+  completedDate: z.string().optional(), // ISO date string for completed_different_date action
 })
 
 /**
@@ -27,11 +28,19 @@ export async function POST(
       )
     }
 
-    const { action } = validation.data
+    const { action, completedDate } = validation.data
 
-    // Get the schedule (no visits needed - completion is manual)
+    // Get the schedule with equipment details (needed for 23:00 slot eligibility)
     const schedule = await prisma.schedule.findUnique({
       where: { id: scheduleId },
+      include: {
+        equipment: {
+          select: {
+            id: true,
+            canUse2300Slot: true,
+          },
+        },
+      },
     })
 
     if (!schedule) {
@@ -72,6 +81,107 @@ export async function POST(
       updateData.status = 'COMPLETED' as const
       updateData.completionDate = schedule.r1PlannedDate // Set to scheduled date
       updateData.isLate = isLate
+    } else if (action === 'completed_different_date') {
+      // Completed on a different date (skipped originally, but completed later)
+      if (!completedDate) {
+        return NextResponse.json(
+          { error: 'completedDate is required for completed_different_date action' },
+          { status: 400 }
+        )
+      }
+      
+      // Parse the date string (YYYY-MM-DD format from date picker)
+      // Store as UTC date at midnight to avoid timezone issues
+      const completedDateObj = new Date(completedDate + 'T00:00:00.000Z')
+      
+      // Validate completedDate is in the past (not today or future)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      if (completedDateObj >= today) {
+        return NextResponse.json(
+          { error: 'Completed date cannot be today or in the future' },
+          { status: 400 }
+        )
+      }
+      
+      // Find available slot on the completion date
+      const { getHKTDateKey, createHKTDate } = await import('@/lib/utils/timezone')
+      const [year, month, day] = completedDate.split('-').map(Number)
+      const completionDateKey = getHKTDateKey(completedDateObj)
+      
+      // Get all schedules in the zone and check which slots appear on this calendar date
+      // We need to check a broader range because existing schedules might have 01:30/03:30
+      // stored on the next day (with day adjustment)
+      const checkStart = new Date(completedDateObj)
+      checkStart.setDate(checkStart.getDate() - 1) // Check from previous day
+      const checkEnd = new Date(completedDateObj)
+      checkEnd.setDate(checkEnd.getDate() + 2) // Check until 2 days later
+      
+      const schedulesInRange = await prisma.schedule.findMany({
+        where: {
+          zoneId: schedule.zoneId,
+          id: { not: scheduleId },
+          status: { not: 'CANCELLED' },
+          r1PlannedDate: {
+            gte: checkStart,
+            lt: checkEnd,
+          },
+        },
+        select: {
+          id: true,
+          r1PlannedDate: true,
+          timeSlot: true,
+        },
+      })
+      
+      // Filter to find which slots are actually displayed on the target date
+      const occupiedSlotSet = new Set<string>()
+      schedulesInRange.forEach(s => {
+        if (s.r1PlannedDate) {
+          const scheduleDateKey = getHKTDateKey(new Date(s.r1PlannedDate))
+          // If this schedule appears on the same calendar date, mark its slot as occupied
+          if (scheduleDateKey === completionDateKey) {
+            occupiedSlotSet.add(s.timeSlot)
+          }
+        }
+      })
+      
+      // Determine available slots (considering equipment's 2300 eligibility)
+      const canUse2300 = schedule.equipment?.canUse2300Slot === true
+      const slotsToCheck: Array<'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330'> = ['SLOT_0130', 'SLOT_0330']
+      if (canUse2300) {
+        slotsToCheck.unshift('SLOT_2300')
+      }
+      
+      // Find first available slot, or default to SLOT_0130 if all occupied
+      let selectedSlot: 'SLOT_2300' | 'SLOT_0130' | 'SLOT_0330' = 'SLOT_0130'
+      for (const slot of slotsToCheck) {
+        if (!occupiedSlotSet.has(slot)) {
+          selectedSlot = slot
+          break
+        }
+      }
+      
+      // Map slot to time
+      const SLOT_TIME = {
+        SLOT_2300: { hour: 23, minute: 0 },
+        SLOT_0130: { hour: 1, minute: 30 },
+        SLOT_0330: { hour: 3, minute: 30 },
+      }
+      
+      const { hour, minute } = SLOT_TIME[selectedSlot]
+      // For "completed on different date", keep the date as selected by user
+      // Don't add a day even for 01:30/03:30 slots - the date is more important than time accuracy
+      let completionDateTime = createHKTDate(year, month, day, hour, minute)
+      
+      updateData.status = 'COMPLETED' as const
+      updateData.completionDate = completedDateObj // Store the actual completion date at midnight UTC
+      updateData.r1PlannedDate = completionDateTime // Store with selected date and slot time (no day adjustment)
+      updateData.timeSlot = selectedSlot // Assign to selected slot
+      updateData.isLate = isLate
+      updateData.skippedCount = { increment: 1 } // Increment as if rescheduled in field
+      updateData.lastSkippedDate = schedule.r1PlannedDate || null // Original planned date was skipped
     } else if (action === 'to_reschedule') {
       // Determine if MISSED (dueDate passed) or SKIPPED (dueDate still in future)
       const today = new Date()

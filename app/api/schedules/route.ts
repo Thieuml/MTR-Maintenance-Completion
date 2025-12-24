@@ -53,12 +53,11 @@ export async function GET(request: NextRequest) {
 
     // Only filter by r1PlannedDate if dates are provided AND status is not SKIPPED/MISSED
     // SKIPPED/MISSED items have null r1PlannedDate, so date filtering would exclude them
-    // COMPLETED items normally keep r1PlannedDate (the planned date), but migrated ones might have null r1PlannedDate
-    // For migrated COMPLETED items with null r1PlannedDate, we need to also check updatedAt as fallback
+    // COMPLETED items should be filtered by completionDate OR r1PlannedDate (for old records without completionDate)
     if ((from || to) && status !== 'SKIPPED' && status !== 'MISSED') {
       const dateFilters: any[] = []
 
-      // Primary filter: by r1PlannedDate (works for normal COMPLETED items that keep their planned date)
+      // Primary filter: by r1PlannedDate (works for PLANNED, PENDING items)
       const plannedDateFilter: any = {}
       if (from) {
         // Subtract one day to ensure we capture all HKT times that span into previous UTC day
@@ -73,13 +72,21 @@ export async function GET(request: NextRequest) {
       if (Object.keys(plannedDateFilter).length > 0) {
         dateFilters.push({ r1PlannedDate: plannedDateFilter })
         
-        // Fallback: include COMPLETED items with null r1PlannedDate but updatedAt in range (migrated items only)
+        // For COMPLETED items: also check completionDate (actual completion date)
         const completedDateFilter: any = {
           status: 'COMPLETED',
-          r1PlannedDate: null,
-          updatedAt: plannedDateFilter,
+          completionDate: plannedDateFilter,
         }
         dateFilters.push(completedDateFilter)
+        
+        // Fallback: include COMPLETED items with null completionDate and null r1PlannedDate but updatedAt in range (migrated items only)
+        const legacyCompletedFilter: any = {
+          status: 'COMPLETED',
+          r1PlannedDate: null,
+          completionDate: null,
+          updatedAt: plannedDateFilter,
+        }
+        dateFilters.push(legacyCompletedFilter)
       }
 
       const skippedDateFilter: any = { status: 'SKIPPED' }
@@ -126,6 +133,8 @@ export async function GET(request: NextRequest) {
         workOrderNumber: true,
         lastSkippedDate: true,
         skippedCount: true,
+        completionDate: true,
+        isLate: true,
         updatedAt: true,
         equipment: {
           select: {

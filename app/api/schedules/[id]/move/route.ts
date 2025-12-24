@@ -79,16 +79,27 @@ async function findNextAvailableSlot(params: {
   while (compareHKTDateKeys(cursorKey, endKey) <= 0) {
     const occupiedSlots = occupiedSlotsByDate.get(cursorKey) || new Set()
     
-    // Check each time slot for this date
+    // Check if there's at least one empty slot on this date
+    let firstEmptySlot: keyof typeof SLOT_TIME | null = null
     for (const slot of slotsToCheck) {
       if (!occupiedSlots.has(slot)) {
-        return { dateKey: cursorKey, timeSlot: slot }
+        firstEmptySlot = slot
+        break
       }
+    }
+    
+    // If there's at least one empty slot, use it
+    if (firstEmptySlot) {
+      return { dateKey: cursorKey, timeSlot: firstEmptySlot }
+    } else {
+      // No empty slot on this date - default to SLOT_0130 (1:30 AM)
+      return { dateKey: cursorKey, timeSlot: 'SLOT_0130' }
     }
     
     cursorKey = addDaysToHKTDateKey(cursorKey, 1)
   }
 
+  // If we've checked all dates and found nothing, return null
   return null
 }
 
@@ -167,12 +178,324 @@ export async function POST(
 
     const requestedDateKey = targetDateStr ?? getHKTDateKey(newDateObj)
     const todayKey = getHKTTodayKey()
+    const isPastDate = compareHKTDateKeys(requestedDateKey, todayKey) < 0
 
-    if (compareHKTDateKeys(requestedDateKey, todayKey) < 0) {
-      return NextResponse.json(
-        { error: 'Cannot move schedule to a past date.' },
-        { status: 400 }
-      )
+    console.error('[Schedule Move] DEBUG:', {
+      scheduleId,
+      scheduleStatus: scheduleToMove.status,
+      requestedDateKey,
+      todayKey,
+      isPastDate,
+      newTimeSlot,
+      targetDateStr,
+    })
+
+    // If PENDING, first mark as SKIPPED (auto-skip), then reschedule
+    // This combines the skip and reschedule steps into one operation
+    // PLANNED items just update the date without status change
+    // Note: These are used in both past and future date handling
+    const wasPending = scheduleToMove.status === 'PENDING'
+    const skippedCountIncrement = wasPending ? 1 : 0
+    const lastSkippedDateValue = wasPending ? scheduleToMove.r1PlannedDate : scheduleToMove.lastSkippedDate
+
+    // Handle past date moves - mark as completed
+    if (isPastDate) {
+      // Check what's in the target slot (same equipment, same date, same time slot)
+      // Match by date key (day) and time slot, since r1PlannedDate stores full datetime
+      const targetSlotStart = dateKeyToDate(requestedDateKey, 0, 0)
+      const nextDayStart = addDaysToHKTDateKey(requestedDateKey, 1)
+      const targetSlotEnd = dateKeyToDate(nextDayStart, 0, 0)
+      
+      console.log('[Schedule Move] Looking for target slot schedule:', {
+        equipmentId: scheduleToMove.equipmentId,
+        zoneId: scheduleToMove.zoneId,
+        targetSlotStart: targetSlotStart.toISOString(),
+        targetSlotEnd: targetSlotEnd.toISOString(),
+        requestedDateKey,
+        newTimeSlot,
+        scheduleId,
+      })
+
+      // Query by zone, date, and time slot (not equipmentId) since we want to find ANY schedule in that slot
+      // But we need to make sure it's for the same equipment OR handle the swap correctly
+      // Actually, wait - if we're moving within the same calendar row (same equipment), the PENDING should be same equipment
+      // But let's check both: same equipment first, then same zone as fallback
+      let targetSlotSchedule = await prisma.schedule.findFirst({
+        where: {
+          equipmentId: scheduleToMove.equipmentId,
+          r1PlannedDate: {
+            gte: targetSlotStart,
+            lt: targetSlotEnd,
+          },
+          timeSlot: newTimeSlot,
+          id: { not: scheduleId },
+        },
+        include: {
+          equipment: true,
+        },
+      })
+
+      // If not found with same equipment, try same zone (in case of calendar display issue)
+      if (!targetSlotSchedule) {
+        targetSlotSchedule = await prisma.schedule.findFirst({
+          where: {
+            zoneId: scheduleToMove.zoneId,
+            r1PlannedDate: {
+              gte: targetSlotStart,
+              lt: targetSlotEnd,
+            },
+            timeSlot: newTimeSlot,
+            id: { not: scheduleId },
+            status: { in: ['PENDING', 'COMPLETED'] }, // Only check for these statuses in past dates
+          },
+          include: {
+            equipment: true,
+          },
+        })
+      }
+
+      console.log('[Schedule Move] Target slot schedule found:', {
+        found: !!targetSlotSchedule,
+        id: targetSlotSchedule?.id,
+        status: targetSlotSchedule?.status,
+        r1PlannedDate: targetSlotSchedule?.r1PlannedDate?.toISOString(),
+        timeSlot: targetSlotSchedule?.timeSlot,
+        equipmentNumber: targetSlotSchedule?.equipment?.equipmentNumber,
+      })
+
+      // Get original date for swap scenarios
+      // Need to ensure we have a proper date with the correct time slot
+      let originalDate: Date | null = null
+      const originalTimeSlot = scheduleToMove.timeSlot
+      
+      if (scheduleToMove.r1PlannedDate) {
+        originalDate = new Date(scheduleToMove.r1PlannedDate)
+      } else if (scheduleToMove.r0PlannedDate) {
+        // If no r1PlannedDate, use r0PlannedDate but apply the current timeSlot
+        const r0Date = new Date(scheduleToMove.r0PlannedDate)
+        const { hour, minute } = SLOT_TIME[originalTimeSlot]
+        const year = r0Date.getFullYear()
+        const month = r0Date.getMonth() + 1
+        const day = r0Date.getDate()
+        originalDate = createHKTDate(year, month, day, hour, minute)
+      }
+
+      if (!targetSlotSchedule) {
+        // Case 1: Empty slot - mark as COMPLETED
+        const updated = await prisma.schedule.update({
+          where: { id: scheduleId },
+          data: {
+            r1PlannedDate: newDateObj,
+            timeSlot: newTimeSlot,
+            status: 'COMPLETED',
+            completionDate: newDateObj,
+            skippedCount: wasPending ? { increment: skippedCountIncrement } : undefined,
+            lastSkippedDate: wasPending ? lastSkippedDateValue : undefined,
+          },
+          select: {
+            id: true,
+            r0PlannedDate: true,
+            r1PlannedDate: true,
+            dueDate: true,
+            batch: true,
+            timeSlot: true,
+            status: true,
+            workOrderNumber: true,
+            equipment: true,
+            zone: true,
+            fixedEngineer: true,
+            rotatingEngineer: true,
+            completionDate: true,
+          },
+        })
+        return NextResponse.json({ schedule: updated })
+      } else if (targetSlotSchedule.status === 'PENDING') {
+        // Case 2: PENDING slot - mark moved item as COMPLETED, swap PENDING to original slot as PLANNED
+        if (!originalDate) {
+          return NextResponse.json(
+            { error: 'Cannot swap: original schedule has no planned date.' },
+            { status: 400 }
+          )
+        }
+
+        // Check if original date is in the future (required for PLANNED status)
+        const originalDateKey = getHKTDateKey(originalDate)
+        if (compareHKTDateKeys(originalDateKey, todayKey) < 0) {
+          return NextResponse.json(
+            { error: 'Cannot swap: original date is in the past. PENDING item cannot be moved to past date.' },
+            { status: 400 }
+          )
+        }
+
+        // Check if the original slot is already occupied (shouldn't happen, but safety check)
+        const { hour, minute } = SLOT_TIME[originalTimeSlot]
+        const originalYear = originalDate.getFullYear()
+        const originalMonth = originalDate.getMonth() + 1
+        const originalDay = originalDate.getDate()
+        const originalDateWithSlot = createHKTDate(originalYear, originalMonth, originalDay, hour, minute)
+        
+        // Check for conflicts at the original slot (excluding the schedule we're moving and the one we're swapping)
+        const originalSlotConflict = await prisma.schedule.findFirst({
+          where: {
+            equipmentId: scheduleToMove.equipmentId,
+            r1PlannedDate: {
+              gte: dateKeyToDate(originalDateKey, 0, 0),
+              lt: dateKeyToDate(addDaysToHKTDateKey(originalDateKey, 1), 0, 0),
+            },
+            timeSlot: originalTimeSlot,
+            id: { notIn: [scheduleId, targetSlotSchedule.id] },
+          },
+          include: {
+            equipment: {
+              select: {
+                equipmentNumber: true,
+              },
+            },
+          },
+        })
+
+        if (originalSlotConflict) {
+          return NextResponse.json(
+            { error: `Cannot swap: original slot is already occupied by ${originalSlotConflict.equipment.equipmentNumber}.` },
+            { status: 400 }
+          )
+        }
+
+        // Calculate isLate for swapped PENDING schedule
+        let isLateSwap = false
+        if (targetSlotSchedule.dueDate) {
+          const scheduledDate = new Date(originalDateWithSlot)
+          const dueDate = new Date(targetSlotSchedule.dueDate)
+          scheduledDate.setHours(0, 0, 0, 0)
+          dueDate.setHours(0, 0, 0, 0)
+          const lateThreshold = new Date(dueDate)
+          lateThreshold.setDate(lateThreshold.getDate() - 5)
+          isLateSwap = scheduledDate >= lateThreshold
+        }
+
+        console.log('[Schedule Move] Swapping PENDING item:', {
+          movingScheduleId: scheduleId,
+          targetPendingScheduleId: targetSlotSchedule.id,
+          targetPendingStatus: targetSlotSchedule.status,
+          originalDateWithSlot: originalDateWithSlot.toISOString(),
+          originalTimeSlot,
+          newStatus: 'PLANNED',
+        })
+
+        try {
+          const [updated1, updated2] = await prisma.$transaction([
+            // Mark moved item as COMPLETED
+            prisma.schedule.update({
+              where: { id: scheduleId },
+              data: {
+                r1PlannedDate: newDateObj,
+                timeSlot: newTimeSlot,
+                status: 'COMPLETED',
+                completionDate: newDateObj,
+                skippedCount: wasPending ? { increment: skippedCountIncrement } : undefined,
+                lastSkippedDate: wasPending ? lastSkippedDateValue : undefined,
+              },
+              select: {
+                id: true,
+                r0PlannedDate: true,
+                r1PlannedDate: true,
+                dueDate: true,
+                batch: true,
+                timeSlot: true,
+                status: true,
+                workOrderNumber: true,
+                equipment: true,
+                zone: true,
+                fixedEngineer: true,
+                rotatingEngineer: true,
+                completionDate: true,
+              },
+            }),
+            // Swap PENDING to original slot as PLANNED
+            // Clear any PENDING-related state and set to PLANNED
+            prisma.schedule.update({
+              where: { id: targetSlotSchedule.id },
+              data: {
+                r1PlannedDate: originalDateWithSlot,
+                timeSlot: originalTimeSlot,
+                status: 'PLANNED',
+                isLate: isLateSwap,
+                // Ensure completionDate is cleared (shouldn't be set for PENDING, but just in case)
+                completionDate: null,
+              },
+              select: {
+                id: true,
+                r0PlannedDate: true,
+                r1PlannedDate: true,
+                dueDate: true,
+                batch: true,
+                timeSlot: true,
+                status: true,
+                workOrderNumber: true,
+                equipment: true,
+                zone: true,
+                fixedEngineer: true,
+                rotatingEngineer: true,
+              },
+            }),
+          ])
+
+          console.log('[Schedule Move] Swap successful:', {
+            movedSchedule: { id: updated1.id, status: updated1.status, r1PlannedDate: updated1.r1PlannedDate },
+            swappedSchedule: { id: updated2.id, status: updated2.status, r1PlannedDate: updated2.r1PlannedDate },
+          })
+
+          return NextResponse.json({
+            movedSchedule: updated1,
+            swappedSchedule: updated2,
+          })
+        } catch (error) {
+          console.error('[Schedule Move] Transaction failed:', error)
+          throw error
+        }
+      } else if (targetSlotSchedule.status === 'COMPLETED') {
+        // Case 3: COMPLETED slot - mark moved item as COMPLETED, keep other unchanged
+        // Both items stay in the same slot - no swap needed
+        console.log('[Schedule Move] Moving to COMPLETED slot - keeping both items:', {
+          movingScheduleId: scheduleId,
+          targetCompletedScheduleId: targetSlotSchedule.id,
+          targetSlotStatus: targetSlotSchedule.status,
+        })
+        
+        const updated = await prisma.schedule.update({
+          where: { id: scheduleId },
+          data: {
+            r1PlannedDate: newDateObj,
+            timeSlot: newTimeSlot,
+            status: 'COMPLETED',
+            completionDate: newDateObj,
+            skippedCount: wasPending ? { increment: skippedCountIncrement } : undefined,
+            lastSkippedDate: wasPending ? lastSkippedDateValue : undefined,
+          },
+          select: {
+            id: true,
+            r0PlannedDate: true,
+            r1PlannedDate: true,
+            dueDate: true,
+            batch: true,
+            timeSlot: true,
+            status: true,
+            workOrderNumber: true,
+            equipment: true,
+            zone: true,
+            fixedEngineer: true,
+            rotatingEngineer: true,
+            completionDate: true,
+          },
+        })
+        return NextResponse.json({ schedule: updated })
+      } else {
+        // Other statuses in past date slot - shouldn't happen, but handle gracefully
+        return NextResponse.json(
+          { error: `Cannot move to past date: target slot has status ${targetSlotSchedule.status}. Only empty, PENDING, or COMPLETED slots are allowed.` },
+          { status: 400 }
+        )
+      }
     }
 
     // Warn about 23:00 slot eligibility but allow if allowInvalid2300Slot is true
@@ -190,9 +513,9 @@ export async function POST(
       )
     }
 
-    // If there is a conflicting schedule
+    // If there is a conflicting schedule (only for future dates - past dates handle conflicts themselves)
     let scheduleToConflict: any = null
-    if (swapWithScheduleId) {
+    if (swapWithScheduleId && !isPastDate) {
       scheduleToConflict = await prisma.schedule.findUnique({
         where: { id: swapWithScheduleId },
         include: {
@@ -207,13 +530,6 @@ export async function POST(
         )
       }
     }
-
-    // If PENDING, first mark as SKIPPED (auto-skip), then reschedule
-    // This combines the skip and reschedule steps into one operation
-    // PLANNED items just update the date without status change
-    const wasPending = scheduleToMove.status === 'PENDING'
-    const skippedCountIncrement = wasPending ? 1 : 0
-    const lastSkippedDateValue = wasPending ? scheduleToMove.r1PlannedDate : scheduleToMove.lastSkippedDate
 
     // Calculate isLate flag: r1PlannedDate >= dueDate - 5 days (same logic as at risk)
     // This means: scheduled less than 6 days before the due date
